@@ -494,18 +494,11 @@ async function doSearch() {
   showLoading(nextTag);
   document.getElementById('searchBtn').disabled = true;
 
-  // instagram-scraper는 팔로워 수 포함, hashtag-scraper는 빠르지만 팔로워 없음
-  // 두 액터 동시 실행 후 팔로워 수 있는 데이터 우선 사용
-  const freshId = Date.now();
-  const [rA, rB] = await Promise.all([
-    runApifyActor('apify~instagram-scraper',
-      { search: nextTag, searchType: 'hashtag', searchLimit: 1,
-        resultsLimit: 30, resultsType: 'posts', _rid: freshId }, token),
-    runApifyActor('apify~instagram-hashtag-scraper',
-      { hashtags: [nextTag], resultsLimit: 30, _rid: freshId + 1 }, token)
-  ]);
-  // instagram-scraper 결과를 우선, 없으면 hashtag-scraper 사용
-  const raw = rA.length > 0 ? rA : rB;
+  const raw = await runApifyActor(
+    'apify~instagram-hashtag-scraper',
+    { hashtags: [nextTag], resultsLimit: 30, _rid: Date.now() },
+    token
+  );
 
   document.getElementById('searchBtn').disabled = false;
 
