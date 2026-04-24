@@ -306,20 +306,15 @@
 // ── 설정 ──────────────────────────────────────────────
 const APIFY_TOKEN = 'apify_api_2EvoBCWLbblDuQ225Pl9VeNIHw9RKl10lF0b';
 const APIFY_API   = 'https://api.apify.com/v2';
-const VERSION     = 'v8';   // 배포 버전 확인용
+const VERSION     = 'v9';   // 배포 버전 확인용
 
 let allPosts          = [];
 let currentViewBuffer = [];  // 현재 화면 배치 (팔로워 필터 적용 전 원본)
 let savedIds   = new Set();
 let panelOpen  = false;
 let currentTag = '';   // 실시간 필터용 현재 태그
-
-// ── 검색 세션 (해시태그 자동 순환) ────────────────────
-// 재검색 시 사이드바 해시태그를 순서대로 자동 검색해서
-// 매번 새로운 계정을 보여줌
-const tagQueues  = {};   // inputTag → 아직 안 fetch한 태그 배열
-const tagBuffers = {};   // inputTag → 수집된 전체 포스트
-const tagShown   = {};   // inputTag → 이미 표시한 username Set
+let lastBuffer = [];   // 마지막 검색 전체 결과 (재검색용)
+let shownUsers = new Set(); // 이미 표시한 username
 
 // ── 해시태그 관리 (localStorage) ──────────────────────
 const HASHTAGS_KEY = 'ozkiz_hashtags';
@@ -444,108 +439,86 @@ async function runApifyActor(actor, body, token) {
   } catch { return []; }
 }
 
-// ── 로딩 화면 지우기 (에러/빈 결과용) ───────────────────
-function showEmpty(msg) {
-  document.getElementById('cardsGrid').innerHTML = `
-    <div class="empty">
-      <div style="font-size:48px;margin-bottom:12px">😢</div>
-      <div style="font-size:16px;font-weight:700;color:var(--text-muted)">${msg}</div>
-    </div>`;
-  document.getElementById('searchBtn').disabled = false;
-}
-
-// ── 해시태그 검색 ─────────────────────────────────────
+// ── 해시태그 검색 (단순 버전) ──────────────────────────
+// 검색 버튼을 누르면 해당 태그 하나만 검색
+// 재검색 시 버퍼에 남은 계정이 있으면 다음 배치 표시
 async function doSearch() {
-  const inputTag = document.getElementById('hashtagInput').value.replace(/^#/, '').trim();
-  if (!inputTag) { showToast('해시태그를 입력해주세요'); return; }
+  const tag   = document.getElementById('hashtagInput').value.replace(/^#/, '').trim();
+  if (!tag) { showToast('해시태그를 입력해주세요'); return; }
 
   const limit = parseInt(document.getElementById('limitSlider').value) || 20;
   const token = localStorage.getItem('ozkiz_apify_token') || APIFY_TOKEN;
-  currentTag  = inputTag;
 
-  // ── 세션 초기화 ──────────────────────────────────────
-  if (!tagQueues[inputTag]) {
-    const allTags = getHashtags();
-    tagQueues[inputTag]  = [inputTag, ...allTags.filter(t => t !== inputTag)];
-    tagBuffers[inputTag] = [];
-    tagShown[inputTag]   = new Set();
+  // 태그가 바뀌면 버퍼 초기화
+  if (tag !== currentTag) {
+    lastBuffer = [];
+    shownUsers = new Set();
+    currentTag = tag;
   }
 
-  const buf   = tagBuffers[inputTag];
-  const shown = tagShown[inputTag];
-
-  // ── 버퍼에 안 본 계정이 있으면 API 호출 없이 표시 ────
-  const unseen = buf.filter(p => !shown.has(p.username));
+  // 버퍼에 안 본 계정이 있으면 API 호출 없이 다음 배치 표시
+  const unseen = lastBuffer.filter(p => !shownUsers.has(p.username));
   if (unseen.length >= Math.min(limit, 3)) {
     const batch = unseen.slice(0, limit);
-    batch.forEach(p => shown.add(p.username));
+    batch.forEach(p => shownUsers.add(p.username));
     currentViewBuffer = batch;
     applyFilters();
-    showBanner('success', `🔄 다음 배치 ${batch.length}개 · 남은 ${unseen.length - batch.length}개`);
+    const left = unseen.length - batch.length;
+    showBanner('success', `🔄 다음 배치 ${batch.length}개 · 남은 ${left}개`);
     return;
   }
 
-  // ── 큐 소진 → 세션 초기화 (재검색 시 처음부터) ───────
-  if (tagQueues[inputTag].length === 0) {
-    delete tagQueues[inputTag];
-    delete tagBuffers[inputTag];
-    delete tagShown[inputTag];
-    showToast('모든 태그를 다 봤어요! 처음부터 다시 시작해요 🔄');
-    document.getElementById('resultInfo').textContent = '다시 검색 버튼을 눌러주세요';
-    return;
-  }
-
-  // ── Apify 호출 ───────────────────────────────────────
-  const nextTag = tagQueues[inputTag].shift();
-  showLoading(nextTag);
+  // Apify 호출
+  showLoading(tag);
   document.getElementById('searchBtn').disabled = true;
 
   let raw = [];
   try {
-    raw = await runApifyActor(
-      'apify~instagram-hashtag-scraper',
-      { hashtags: [nextTag], resultsLimit: 30, _rid: Date.now() },
-      token
+    const res = await fetch(
+      `${APIFY_API}/acts/apify~instagram-hashtag-scraper/run-sync-get-dataset-items?token=${token}&timeout=120&memory=256`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hashtags: [tag], resultsLimit: 30, _rid: Date.now() }) }
     );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) raw = data;
+    }
   } catch(e) { raw = []; }
 
   document.getElementById('searchBtn').disabled = false;
 
-  // 결과 없음 → 로딩 화면 제거 후 메시지 표시
-  if (!raw || raw.length === 0) {
-    showEmpty(`#${nextTag} 결과를 가져오지 못했어요<br><span style="font-size:13px">잠시 후 다시 검색해주세요</span>`);
-    document.getElementById('resultInfo').textContent = '#' + nextTag + ' · 결과 없음';
+  if (raw.length === 0) {
+    document.getElementById('cardsGrid').innerHTML = `
+      <div class="empty">
+        <div style="font-size:48px;margin-bottom:12px">😢</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px">결과를 가져오지 못했어요</div>
+        <div style="font-size:13px;color:var(--text-muted)">잠시 후 다시 검색해주세요</div>
+      </div>`;
+    document.getElementById('resultInfo').textContent = '#' + tag + ' · 결과 없음';
     return;
   }
 
-  // 버퍼에 추가 (중복 제거)
-  const existIds   = new Set(buf.map(p => p.id));
-  const existUsers = new Set(buf.map(p => p.username));
+  // 중복 제거 후 버퍼 저장
+  const seenId = new Set(), seenU = new Set(), buf = [];
   raw.forEach((item, i) => {
-    const p = normalizePost(item, buf.length + i);
-    if (existIds.has(p.id)) return;
-    if (p.username !== '알수없음' && existUsers.has(p.username)) return;
-    existIds.add(p.id);
-    existUsers.add(p.username);
+    const p = normalizePost(item, i);
+    if (seenId.has(p.id)) return;
+    if (p.username !== '알수없음' && seenU.has(p.username)) return;
+    seenId.add(p.id); seenU.add(p.username);
     buf.push(p);
   });
 
-  // 새 unseen 표시
-  const newUnseen = buf.filter(p => !shown.has(p.username));
-  if (newUnseen.length === 0) {
-    showEmpty(`#${nextTag}에 새 계정이 없어요<br><span style="font-size:13px">재검색하면 다음 태그 결과를 가져와요</span>`);
-    document.getElementById('resultInfo').textContent = '#' + nextTag + ' · 새 계정 없음';
-    return;
-  }
+  lastBuffer = buf;
+  shownUsers = new Set();
 
-  const batch = newUnseen.slice(0, limit);
-  batch.forEach(p => shown.add(p.username));
+  const batch = buf.slice(0, limit);
+  batch.forEach(p => shownUsers.add(p.username));
   currentViewBuffer = batch;
   applyFilters();
 
-  const remaining = tagQueues[inputTag].length;
-  const tagNote   = nextTag !== inputTag ? ` · 관련 #${nextTag} 결과` : '';
-  showBanner('success', `✅ ${batch.length}개 표시${tagNote} · 재검색하면 ${remaining}개 태그 더`);
+  const left = buf.length - batch.length;
+  showBanner('success',
+    `✅ #${tag} 검색 완료! ${batch.length}개 표시${left > 0 ? ' · 재검색하면 '+left+'개 더' : ''}`);
 }
 
 // ── 카드 렌더링 ───────────────────────────────────────
