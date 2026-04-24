@@ -61,10 +61,10 @@
   .sort-tab { padding: 7px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: var(--text-muted); transition: all 0.2s; }
   .sort-tab.active { background: var(--primary); color: white; }
 
-  .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; }
+  .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; }
   .card { background: white; border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; position: relative; }
   .card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(232,25,44,0.15); }
-  .card-image { width: 100%; height: 200px; object-fit: cover; background: #F3E0E0; display: flex; align-items: center; justify-content: center; font-size: 60px; position: relative; overflow: hidden; }
+  .card-image { width: 100%; aspect-ratio: 4/5; object-fit: cover; background: #F3E0E0; display: flex; align-items: center; justify-content: center; font-size: 60px; position: relative; overflow: hidden; }
   .card-image img { width: 100%; height: 100%; object-fit: cover; }
   .card-image-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.45)); }
   .card-badges { position: absolute; top: 10px; left: 10px; display: flex; gap: 4px; z-index: 2; }
@@ -494,11 +494,18 @@ async function doSearch() {
   showLoading(nextTag);
   document.getElementById('searchBtn').disabled = true;
 
-  const raw = await runApifyActor(
-    'apify~instagram-hashtag-scraper',
-    { hashtags: [nextTag], resultsLimit: 30, _rid: Date.now() },
-    token
-  );
+  // instagram-scraper는 팔로워 수 포함, hashtag-scraper는 빠르지만 팔로워 없음
+  // 두 액터 동시 실행 후 팔로워 수 있는 데이터 우선 사용
+  const freshId = Date.now();
+  const [rA, rB] = await Promise.all([
+    runApifyActor('apify~instagram-scraper',
+      { search: nextTag, searchType: 'hashtag', searchLimit: 1,
+        resultsLimit: 30, resultsType: 'posts', _rid: freshId }, token),
+    runApifyActor('apify~instagram-hashtag-scraper',
+      { hashtags: [nextTag], resultsLimit: 30, _rid: freshId + 1 }, token)
+  ]);
+  // instagram-scraper 결과를 우선, 없으면 hashtag-scraper 사용
+  const raw = rA.length > 0 ? rA : rB;
 
   document.getElementById('searchBtn').disabled = false;
 
@@ -580,7 +587,18 @@ function renderCards(data) {
         <div class="card-stats">
           <div class="stat"><div class="stat-val">${fmtNum(p.likes)}</div><div class="stat-key">좋아요</div></div>
           <div class="stat"><div class="stat-val">${fmtNum(p.comments)}</div><div class="stat-key">댓글</div></div>
-          <div class="stat"><div class="stat-val">${followers}</div><div class="stat-key">팔로워</div></div>
+          <div class="stat">
+            ${p.followers != null
+              ? `<div class="stat-val">${fmtNum(p.followers)}</div><div class="stat-key">팔로워</div>`
+              : `<div class="stat-val" style="font-size:11px">
+                  ${p.username !== '알수없음'
+                    ? `<a href="https://www.instagram.com/${p.username}/" target="_blank"
+                        onclick="event.stopPropagation()"
+                        style="color:var(--primary);text-decoration:none">프로필 →</a>`
+                    : '—'}
+                </div><div class="stat-key">팔로워</div>`
+            }
+          </div>
         </div>
         <div class="card-footer">
           <button class="btn-save" onclick="event.stopPropagation();toggleSave('${p.id}')">
