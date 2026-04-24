@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OzKiz 모델 파인더</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --primary: #E8192C; --primary-light: #FFE0E3;
+    --secondary: #7C3AED; --accent: #F59E0B;
+    --bg: #FFF5F6; --text: #1F2937; --text-muted: #6B7280;
+    --border: #F3E0E0; --success: #10B981;
+    --shadow: 0 2px 12px rgba(232,25,44,0.10);
+  }
+  body { font-family: 'Segoe UI', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .header {
+    background: #E8192C;
+    padding: 0 32px; height: 64px; display: flex; align-items: center;
+    justify-content: space-between; position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 16px rgba(232,25,44,0.3);
+  }
+  .logo { display: flex; align-items: center; gap: 10px; color: white; font-weight: 800; font-size: 20px; }
+  .logo-icon { height: 36px; }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .stat-badge { background: rgba(255,255,255,0.2); color: white; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+  .header-btn { background: rgba(255,255,255,0.2); color: white; border: none; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .header-btn:hover { background: rgba(255,255,255,0.35); }
+  .api-status { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.15); color: white; padding: 6px 14px; border-radius: 20px; font-size: 12px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #FFD700; animation: pulse 2s infinite; }
+  .dot.live { background: #10B981; animation: none; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .container { display: flex; height: calc(100vh - 64px); }
+
+  .sidebar { width: 280px; background: white; border-right: 1px solid var(--border); padding: 24px 20px; overflow-y: auto; flex-shrink: 0; }
+  .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 12px; }
+  .sidebar-section { margin-bottom: 28px; }
+  .search-box { position: relative; margin-bottom: 8px; }
+  .search-box input { width: 100%; padding: 10px 14px 10px 36px; border: 2px solid var(--border); border-radius: 12px; font-size: 14px; background: var(--bg); color: var(--text); outline: none; transition: border-color 0.2s; }
+  .search-box input:focus { border-color: var(--primary); }
+  .search-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+  .search-btn { width: 100%; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 3px 10px rgba(232,25,44,0.35); transition: transform 0.1s; }
+  .search-btn:hover { transform: translateY(-1px); }
+  .search-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+  .hashtag-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 5px 11px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; border: 2px solid transparent; transition: all 0.2s; }
+  .chip.active { background: var(--primary); color: white; }
+  .chip:not(.active) { background: var(--primary-light); color: var(--primary); }
+
+  .filter-row { margin-bottom: 14px; }
+  .filter-label { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
+  .filter-label span:last-child { font-weight: 700; color: var(--primary); }
+  input[type=range] { width: 100%; accent-color: var(--primary); cursor: pointer; }
+
+  .main { flex: 1; overflow-y: auto; padding: 24px; }
+  .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+  .result-info { font-size: 14px; color: var(--text-muted); }
+  .sort-tabs { display: flex; gap: 4px; }
+  .sort-tab { padding: 7px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: var(--text-muted); transition: all 0.2s; }
+  .sort-tab.active { background: var(--primary); color: white; }
+
+  .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; }
+  .card { background: white; border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; position: relative; }
+  .card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(232,25,44,0.15); }
+  .card-image { width: 100%; height: 200px; object-fit: cover; background: #F3E0E0; display: flex; align-items: center; justify-content: center; font-size: 60px; position: relative; overflow: hidden; }
+  .card-image img { width: 100%; height: 100%; object-fit: cover; }
+  .card-image-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.45)); }
+  .card-badges { position: absolute; top: 10px; left: 10px; display: flex; gap: 4px; z-index: 2; }
+  .badge { padding: 3px 8px; border-radius: 8px; font-size: 10px; font-weight: 700; backdrop-filter: blur(8px); }
+  .badge.type { background: rgba(255,255,255,0.92); color: var(--secondary); }
+  .badge.real { background: #10B981; color: white; }
+  .fav-btn { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.92); border: none; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; z-index: 2; }
+  .fav-btn:hover { transform: scale(1.15); }
+  .fav-btn.active { background: var(--primary); }
+  .card-body { padding: 14px; }
+  .card-username { font-weight: 800; font-size: 15px; margin-bottom: 2px; display: flex; align-items: center; gap: 5px; }
+  .card-caption { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .card-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 12px; }
+  .stat { text-align: center; }
+  .stat-val { font-size: 14px; font-weight: 800; color: var(--text); }
+  .stat-key { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+  .engagement-bar { height: 4px; border-radius: 2px; background: var(--border); margin-bottom: 10px; overflow: hidden; }
+  .engagement-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, #E8192C, #FF6B6B); }
+  .card-footer { display: flex; gap: 6px; }
+  .btn-save { flex: 1; padding: 8px; background: var(--primary); color: white; border: none; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .btn-ig { width: 34px; height: 34px; border: 2px solid var(--border); border-radius: 10px; background: white; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; text-decoration: none; transition: border-color 0.2s; }
+  .btn-ig:hover { border-color: var(--primary); }
+
+  /* Skeleton */
+  .skeleton-card { background: white; border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); }
+  .skeleton-img { height: 200px; background: linear-gradient(90deg,#f5f5f5 25%,#ebebeb 50%,#f5f5f5 75%); background-size: 400px 100%; animation: shimmer 1.2s infinite; }
+  .skeleton-body { padding: 14px; }
+  .skeleton-line { height: 12px; border-radius: 6px; background: linear-gradient(90deg,#f5f5f5 25%,#ebebeb 50%,#f5f5f5 75%); background-size: 400px 100%; animation: shimmer 1.2s infinite; margin-bottom: 10px; }
+  .skeleton-line.short { width: 60%; }
+  @keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+  .modal-overlay.open { display: flex; }
+  .modal { background: white; border-radius: 24px; width: 90%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 60px rgba(0,0,0,0.3); }
+  .modal-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .modal-title { font-size: 18px; font-weight: 800; }
+  .modal-close { width: 32px; height: 32px; border-radius: 50%; border: none; background: var(--bg); cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
+  .modal-body { padding: 24px; }
+  .modal-img { width: 100%; height: 280px; border-radius: 14px; margin-bottom: 16px; background: #F3E0E0; display: flex; align-items: center; justify-content: center; font-size: 72px; overflow: hidden; }
+  .modal-img img { width: 100%; height: 100%; object-fit: cover; }
+  .modal-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
+  .modal-stat { text-align: center; padding: 12px 8px; background: var(--bg); border-radius: 12px; }
+  .modal-stat-val { font-size: 20px; font-weight: 800; color: var(--primary); }
+  .modal-stat-key { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .modal-caption { font-size: 14px; color: var(--text); line-height: 1.6; margin-bottom: 20px; background: var(--bg); padding: 14px; border-radius: 12px; max-height: 120px; overflow-y: auto; }
+  .modal-actions { display: flex; gap: 10px; }
+  .modal-btn { flex: 1; padding: 13px; border-radius: 12px; border: none; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; text-align: center; text-decoration: none; display: flex; align-items: center; justify-content: center; }
+  .modal-btn.primary { background: var(--primary); color: white; box-shadow: 0 4px 12px rgba(232,25,44,0.35); }
+  .modal-btn.secondary { background: var(--bg); color: var(--text); border: 2px solid var(--border); }
+  .modal-btn:hover { transform: translateY(-1px); }
+
+  /* Saved panel */
+  .saved-panel { width: 0; overflow: hidden; background: white; border-left: 1px solid var(--border); transition: width 0.3s; flex-shrink: 0; }
+  .saved-panel.open { width: 240px; }
+  .saved-inner { padding: 20px 16px; width: 240px; }
+  .saved-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 12px; margin-bottom: 6px; cursor: pointer; transition: background 0.2s; }
+  .saved-item:hover { background: var(--bg); }
+  .saved-thumb { width: 42px; height: 42px; border-radius: 10px; object-fit: cover; background: var(--primary-light); flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .saved-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .saved-info { flex: 1; min-width: 0; }
+  .saved-name { font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .saved-sub { font-size: 10px; color: var(--text-muted); }
+  .saved-remove { width: 22px; height: 22px; border-radius: 50%; border: none; background: var(--bg); cursor: pointer; font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
+
+  /* Loading overlay */
+  .loading-msg { text-align: center; padding: 60px 20px; grid-column: 1/-1; }
+  .loading-spinner { font-size: 40px; animation: spin 1.5s linear infinite; margin-bottom: 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty { text-align: center; padding: 60px 20px; grid-column: 1/-1; }
+
+  .fab { position: fixed; bottom: 24px; right: 24px; width: 52px; height: 52px; background: var(--primary); color: white; border: none; border-radius: 16px; font-size: 22px; cursor: pointer; box-shadow: 0 6px 20px rgba(232,25,44,0.4); transition: all 0.2s; display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .fab:hover { transform: scale(1.08); }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: #1F2937; color: white; padding: 12px 22px; border-radius: 12px; font-size: 14px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,0.2); transition: transform 0.3s; z-index: 300; white-space: nowrap; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Settings Modal */
+  #settingsOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 300; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+  #settingsOverlay.open { display: flex; }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <img class="logo-icon" src="https://i.imgur.com/placeholder.png" onerror="this.style.display='none'" alt="">
+    OzKiz 모델 파인더
+  </div>
+  <div class="header-right">
+    <div class="stat-badge" id="savedBadge">💝 저장됨 0개</div>
+    <button class="header-btn" onclick="openSettings()">⚙️ 설정</button>
+    <div class="api-status">
+      <div class="dot" id="apiDot"></div>
+      <span id="apiText">준비 중...</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="section-title">🔍 해시태그 검색</div>
+      <div class="search-box">
+        <span class="search-icon">＃</span>
+        <input type="text" id="hashtagInput" placeholder="해시태그 입력..." value="키즈모델">
+      </div>
+      <div style="height:8px"></div>
+      <button class="search-btn" id="searchBtn" onclick="doSearch()">🔍 검색하기</button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-title">⚡ 해시태그 목록</div>
+      <div class="hashtag-chips" id="hashtagChips"></div>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <div style="position:relative;flex:1">
+          <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#9CA3AF;font-size:13px">＃</span>
+          <input id="newTagInput" type="text" placeholder="새 해시태그"
+            onkeydown="if(event.key==='Enter')addHashtag()"
+            style="width:100%;padding:7px 8px 7px 24px;border:2px solid #F3E0E0;border-radius:10px;font-size:13px;background:#FFF5F6;outline:none">
+        </div>
+        <button onclick="addHashtag()"
+          style="padding:7px 12px;background:#E8192C;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0">
+          +
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-title">👥 팔로워 범위</div>
+      <div class="filter-row">
+        <div class="filter-label"><span>최소</span><span id="followerMinVal">0명</span></div>
+        <input type="range" id="followerMinSlider" min="0" max="50000" step="100" value="0"
+          oninput="
+            const v=parseInt(this.value);
+            const maxV=parseInt(document.getElementById('followerMaxSlider').value);
+            if(v>maxV){document.getElementById('followerMaxSlider').value=v;document.getElementById('followerMaxVal').textContent=v.toLocaleString()+'명';}
+            document.getElementById('followerMinVal').textContent=v.toLocaleString()+'명';
+            applyFilters()">
+      </div>
+      <div class="filter-row" style="margin-top:8px">
+        <div class="filter-label"><span>최대</span><span id="followerMaxVal">제한없음</span></div>
+        <input type="range" id="followerMaxSlider" min="0" max="50000" step="100" value="50000"
+          oninput="
+            const v=parseInt(this.value);
+            const minV=parseInt(document.getElementById('followerMinSlider').value);
+            if(v<minV){document.getElementById('followerMinSlider').value=v;document.getElementById('followerMinVal').textContent=v.toLocaleString()+'명';}
+            document.getElementById('followerMaxVal').textContent=v>=50000?'제한없음':v.toLocaleString()+'명';
+            applyFilters()">
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-title">📊 검색 결과 수</div>
+      <div class="filter-row">
+        <div class="filter-label"><span>최대 결과</span><span id="limitVal">20개</span></div>
+        <input type="range" id="limitSlider" min="5" max="50" step="5" value="20"
+          oninput="document.getElementById('limitVal').textContent=this.value+'개'; applyFilters()">
+      </div>
+    </div>
+
+    <button class="search-btn" onclick="applyFilters()"
+      style="background:linear-gradient(135deg,#7C3AED,#5B21B6);box-shadow:0 3px 10px rgba(124,58,237,0.4)">
+      ✨ 필터 적용
+    </button>
+  </aside>
+
+  <main class="main">
+    <div id="infoBanner"></div>
+    <div class="toolbar">
+      <div class="result-info" id="resultInfo">검색 버튼을 눌러주세요</div>
+      <div class="sort-tabs">
+        <button class="sort-tab active" onclick="sortCards('likes',this)">좋아요순</button>
+        <button class="sort-tab" onclick="sortCards('comments',this)">댓글순</button>
+        <button class="sort-tab" onclick="sortCards('recent',this)">최신순</button>
+      </div>
+    </div>
+    <div id="cardsGrid" class="cards-grid"></div>
+  </main>
+
+  <aside class="saved-panel" id="savedPanel">
+    <div class="saved-inner">
+      <div class="section-title" style="margin-bottom:16px">💝 저장한 게시물</div>
+      <div id="savedList">
+        <div style="text-align:center;padding:30px 0;font-size:13px;color:var(--text-muted)">🌸 저장한 게시물이 없어요</div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<button class="fab" onclick="toggleSavedPanel()">💝</button>
+
+<!-- Settings Modal -->
+<div id="settingsOverlay" onclick="if(event.target===this)closeSettings()">
+  <div style="background:white;border-radius:24px;width:90%;max-width:480px;padding:28px;box-shadow:0 24px 60px rgba(0,0,0,0.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-size:18px;font-weight:800">⚙️ 설정</div>
+      <button onclick="closeSettings()" style="width:32px;height:32px;border-radius:50%;border:none;background:#F3F4F6;cursor:pointer;font-size:18px">✕</button>
+    </div>
+    <div style="background:#FFF5F6;border:1px solid #FFD0D3;border-radius:12px;padding:14px;margin-bottom:20px;font-size:13px;color:#9B1C1C">
+      ⚠️ Apify API 토큰은 비밀번호입니다. 이 페이지 URL을 신뢰하는 팀원에게만 공유하세요.
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="font-size:13px;font-weight:700;color:#374151;display:block;margin-bottom:6px">Apify API 토큰</label>
+      <input id="apifyTokenInput" type="password" placeholder="apify_api_..."
+        style="width:100%;padding:11px 14px;border:2px solid #E5E7EB;border-radius:12px;font-size:13px;outline:none">
+    </div>
+    <div style="display:flex;gap:10px">
+      <button onclick="saveApifyToken()"
+        style="flex:1;padding:12px;background:var(--primary);color:white;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">
+        💾 저장
+      </button>
+      <button onclick="clearApifyToken()"
+        style="padding:12px 16px;background:#F3F4F6;color:#6B7280;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">
+        초기화
+      </button>
+    </div>
+    <div id="settingsMsg" style="margin-top:10px;font-size:13px;text-align:center;color:#6B7280"></div>
+  </div>
+</div>
+
+<!-- Post Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">게시물 상세</div>
+      <button class="modal-close" onclick="closeModalDirect()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── 설정 ──────────────────────────────────────────────
+const APIFY_TOKEN = 'apify_api_2EvoBCWLbblDuQ225Pl9VeNIHw9RKl10lF0b';
+const APIFY_API   = 'https://api.apify.com/v2';
+const VERSION     = 'v8';   // 배포 버전 확인용
+
+let allPosts          = [];
+let currentViewBuffer = [];  // 현재 화면 배치 (팔로워 필터 적용 전 원본)
+let savedIds   = new Set();
+let panelOpen  = false;
+let currentTag = '';   // 실시간 필터용 현재 태그
+
+// ── 검색 세션 (해시태그 자동 순환) ────────────────────
+// 재검색 시 사이드바 해시태그를 순서대로 자동 검색해서
+// 매번 새로운 계정을 보여줌
+const tagQueues  = {};   // inputTag → 아직 안 fetch한 태그 배열
+const tagBuffers = {};   // inputTag → 수집된 전체 포스트
+const tagShown   = {};   // inputTag → 이미 표시한 username Set
+
+// ── 해시태그 관리 (localStorage) ──────────────────────
+const HASHTAGS_KEY = 'ozkiz_hashtags';
+const DEFAULT_HASHTAGS = ['키즈모델','아동모델','키즈스냅','베이비모델','유아모델','키즈패션'];
+
+function getHashtags() {
+  try { return JSON.parse(localStorage.getItem(HASHTAGS_KEY)) || DEFAULT_HASHTAGS.slice(); }
+  catch { return DEFAULT_HASHTAGS.slice(); }
+}
+function saveHashtags(list) { localStorage.setItem(HASHTAGS_KEY, JSON.stringify(list)); }
+
+function renderHashtagChips() {
+  const list = getHashtags();
+  const current = document.getElementById('hashtagInput').value.replace(/^#/,'').trim();
+  document.getElementById('hashtagChips').innerHTML = list.map((tag, i) => `
+    <div class="chip ${tag === current ? 'active' : ''}"
+      style="display:inline-flex;align-items:center;gap:4px"
+      onclick="selectChip(this,'${tag}')">
+      #${tag}
+      <span onclick="event.stopPropagation();removeHashtag(${i})"
+        style="font-size:10px;opacity:0.55;cursor:pointer;line-height:1;padding:0 1px"
+        title="삭제">✕</span>
+    </div>`).join('');
+}
+
+function addHashtag() {
+  const input = document.getElementById('newTagInput');
+  const tag = input.value.replace(/^#/,'').trim();
+  if (!tag) { showToast('해시태그를 입력해주세요'); return; }
+  const list = getHashtags();
+  if (list.includes(tag)) { showToast('이미 있는 해시태그예요'); input.value=''; return; }
+  list.push(tag);
+  saveHashtags(list);
+  renderHashtagChips();
+  input.value = '';
+  showToast('#' + tag + ' 추가됐어요! ✅');
+}
+
+function removeHashtag(i) {
+  const list = getHashtags();
+  const removed = list.splice(i, 1)[0];
+  saveHashtags(list);
+  renderHashtagChips();
+  showToast('#' + removed + ' 삭제됐어요');
+}
+
+// ── 버퍼 (재검색 시 새 결과 제공) ──────────────────────
+// 해시태그별로 가져온 전체 데이터를 저장해두고,
+// 재검색 시 아직 안 본 계정부터 우선 표시
+// (postBuffers, shownUserSets 는 tagBuffers/tagShown 으로 통합됨)
+
+// ── 초기화 ────────────────────────────────────────────
+function init() {
+  setStatus('Apify 연결됨 ✓', true);
+  renderHashtagChips();
+  // 버전 표시 (배포 확인용)
+  document.title = `OzKiz 모델 파인더 ${VERSION}`;
+  showBanner('success', `✅ Apify 연결 완료! 해시태그를 검색해보세요 🔍 <span style="opacity:0.5;font-size:11px">${VERSION}</span>`);
+}
+
+// ── 실시간 필터 적용 (슬라이더 변경 시 즉시 반영) ─────
+function applyFilters() {
+  // currentViewBuffer: doSearch가 설정한 "현재 배치" 기준으로만 필터링
+  // → 전체 버퍼(tagBuffers)를 쓰면 이미 본 결과가 다시 나오는 버그 발생
+  if (!currentViewBuffer.length) return;
+
+  const limit      = parseInt(document.getElementById('limitSlider').value)      || 20;
+  const minFollow  = parseInt(document.getElementById('followerMinSlider').value) || 0;
+  const maxRaw     = parseInt(document.getElementById('followerMaxSlider').value);
+  const maxFollow  = maxRaw >= 50000 ? Infinity : maxRaw;
+
+  const filtered = currentViewBuffer.filter(p => {
+    if (p.followers == null) return true;   // 팔로워 비공개 → 통과
+    if (p.followers < minFollow) return false;
+    if (p.followers > maxFollow) return false;
+    return true;
+  });
+
+  allPosts = filtered.slice(0, limit);
+  sortCards('likes', document.querySelector('.sort-tab.active'));
+
+  const hiddenCount = currentViewBuffer.length - filtered.length;
+  const hasFilter   = minFollow > 0 || maxFollow < Infinity;
+  const followInfo  = hasFilter
+    ? ` · 팔로워 ${minFollow.toLocaleString()}~${maxFollow === Infinity ? '무제한' : maxFollow.toLocaleString()}명 (${hiddenCount}개 제외)`
+    : '';
+  document.getElementById('resultInfo').innerHTML =
+    `<strong>${allPosts.length}개</strong>의 계정 · <span style="color:var(--primary)">#${currentTag}</span>${followInfo}`;
+}
+
+// ── Apify 데이터 정규화 ───────────────────────────────
+function normalizePost(p, i) {
+  const username  = p.ownerUsername || p.username || p.owner?.username || p.ownerId || '알수없음';
+  const fullName  = p.ownerFullName || p.fullName || p.owner?.fullName || '';
+  const followers = p.ownerFollowersCount ?? p.followersCount ?? p.owner?.followersCount ?? null;
+  const likes     = p.likesCount ?? p.likes ?? p.likeCount ?? 0;
+  const comments  = p.commentsCount ?? p.comments ?? p.commentCount ?? 0;
+  const imgUrl    = p.displayUrl || p.imageUrl || p.thumbnailUrl || p.images?.[0] || '';
+  const shortCode = p.shortCode || p.code || '';
+  const permalink = p.url || p.link || (shortCode ? `https://www.instagram.com/p/${shortCode}/` : '');
+  const caption   = p.caption || p.text || '';
+  const timestamp = p.timestamp || p.takenAt || p.taken_at || '';
+  const mediaType = p.type || p.mediaType || (p.isVideo ? 'Video' : 'Image');
+  return {
+    id: p.id || shortCode || String(i),
+    username, fullName, followers, likes, comments,
+    imgUrl, permalink, caption, timestamp,
+    type: mediaType, _real: true
+  };
+}
+
+// ── Apify 단일 액터 실행 ──────────────────────────────
+async function runApifyActor(actor, body, token) {
+  try {
+    const res = await fetch(
+      `${APIFY_API}/acts/${actor}/run-sync-get-dataset-items?token=${token}&timeout=120&memory=256`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    );
+    if (!res.ok) return [];
+    const arr = await res.json();
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+
+// ── 해시태그 검색 ─────────────────────────────────────
+async function doSearch() {
+  const inputTag = document.getElementById('hashtagInput').value.replace(/^#/, '').trim();
+  if (!inputTag) { showToast('해시태그를 입력해주세요'); return; }
+
+  const limit = parseInt(document.getElementById('limitSlider').value) || 20;
+  const token = localStorage.getItem('ozkiz_apify_token') || APIFY_TOKEN;
+  currentTag  = inputTag;
+
+  // ── 세션 초기화 (첫 검색 시) ────────────────────────
+  if (!tagQueues[inputTag]) {
+    const allTags  = getHashtags();
+    // 큐: [검색한 태그, 나머지 사이드바 태그들]
+    tagQueues[inputTag]  = [inputTag, ...allTags.filter(t => t !== inputTag)];
+    tagBuffers[inputTag] = [];
+    tagShown[inputTag]   = new Set();
+  }
+
+  const buf   = tagBuffers[inputTag];
+  const shown = tagShown[inputTag];
+
+  // ── 버퍼에 안 본 계정이 있으면 바로 다음 배치 표시 (API 호출 없음) ──
+  const unseen = buf.filter(p => !shown.has(p.username));
+  if (unseen.length >= Math.min(limit, 3)) {
+    const batch = unseen.slice(0, limit);
+    batch.forEach(p => shown.add(p.username));
+    currentViewBuffer = batch;   // ← 현재 배치 저장
+    applyFilters();
+    const left = unseen.length - batch.length;
+    showBanner('success', `🔄 다음 배치 ${batch.length}개 · 남은 계정 ${left}개`);
+    return;
+  }
+
+  // ── 버퍼 부족 → 다음 해시태그 fetch ────────────────
+  if (tagQueues[inputTag].length === 0) {
+    // 모든 태그 소진 → 세션 초기화 후 처음부터
+    delete tagQueues[inputTag];
+    delete tagBuffers[inputTag];
+    delete tagShown[inputTag];
+    showToast('모든 관련 태그를 다 봤어요! 처음부터 다시 시작해요 🔄');
+    await doSearch();
+    return;
+  }
+
+  const nextTag  = tagQueues[inputTag].shift();
+  const isExtra  = nextTag !== inputTag;
+
+  showLoading(nextTag);
+  document.getElementById('searchBtn').disabled = true;
+
+  const raw = await runApifyActor(
+    'apify~instagram-hashtag-scraper',
+    { hashtags: [nextTag], resultsLimit: 30, _rid: Date.now() },
+    token
+  );
+
+  document.getElementById('searchBtn').disabled = false;
+
+  if (raw.length === 0 && tagQueues[inputTag].length > 0) {
+    // 이 태그에서 결과 없음 → 다음 태그로
+    showToast(`#${nextTag} 결과 없음, 다음 태그 검색 중...`);
+    await doSearch();
+    return;
+  }
+
+  // 새 포스트를 기존 버퍼에 추가 (전체 중복 제거)
+  const existIds  = new Set(buf.map(p => p.id));
+  const existUsers = new Set(buf.map(p => p.username));
+  raw.forEach((item, i) => {
+    const p = normalizePost(item, buf.length + i);
+    if (existIds.has(p.id)) return;
+    if (p.username !== '알수없음' && existUsers.has(p.username)) return;
+    existIds.add(p.id);
+    existUsers.add(p.username);
+    buf.push(p);
+  });
+
+  // 새로 추가된 unseen 표시
+  const newUnseen = buf.filter(p => !shown.has(p.username));
+  if (newUnseen.length === 0 && tagQueues[inputTag].length > 0) {
+    showToast(`#${nextTag}에 새 계정 없음, 다음 태그 검색 중...`);
+    await doSearch();
+    return;
+  }
+
+  const batch = newUnseen.slice(0, limit);
+  batch.forEach(p => shown.add(p.username));
+  currentViewBuffer = batch;   // ← 현재 배치 저장 (applyFilters가 이것만 필터링)
+  applyFilters();
+
+  const left      = newUnseen.length - batch.length;
+  const remaining = tagQueues[inputTag].length;
+  const tagNote   = isExtra ? ` · 관련 #${nextTag} 결과` : '';
+  showBanner('success',
+    `✅ ${batch.length}개 표시${tagNote} · 재검색하면 ${remaining}개 태그 더 검색 가능`);
+}
+
+// ── 카드 렌더링 ───────────────────────────────────────
+function renderCards(data) {
+  const grid = document.getElementById('cardsGrid');
+  if (!data || !data.length) {
+    grid.innerHTML = `<div class="empty"><div style="font-size:48px">🔍</div><div style="font-size:18px;font-weight:700;margin:12px 0 6px">결과 없음</div></div>`;
+    return;
+  }
+
+  grid.innerHTML = data.map((p, i) => {
+    const typeLabel = p.type === 'Video' ? '🎬 동영상' : p.type === 'Sidecar' ? '🖼️ 앨범' : '📷 이미지';
+    const caption   = p.caption ? p.caption.substring(0,80) + (p.caption.length > 80 ? '...' : '') : '캡션 없음';
+    const date      = p.timestamp ? new Date(p.timestamp).toLocaleDateString('ko-KR') : '';
+    const engPct    = p.likes ? Math.min((p.likes / 300) * 100, 100) : 20;
+    const followers = p.followers != null ? fmtNum(p.followers) : '—';
+
+    return `
+    <div class="card" onclick="openModal('${p.id}')">
+      <div class="card-image" id="cimg-${p.id}">
+        ${p.imgUrl && p._real
+          ? `<img src="${p.imgUrl}" alt="" style="width:100%;height:100%;object-fit:cover" onerror="imgFail('${p.id}',${i})">`
+          : `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:60px">${getEmoji(i)}</div>`
+        }
+        <div class="card-image-overlay"></div>
+        <div class="card-badges">
+          <span class="badge type">${typeLabel}</span>
+          ${p._real ? '<span class="badge real">REAL</span>' : ''}
+        </div>
+        <button class="fav-btn ${savedIds.has(p.id)?'active':''}"
+          onclick="event.stopPropagation();toggleSave('${p.id}')">
+          ${savedIds.has(p.id)?'❤️':'🤍'}
+        </button>
+      </div>
+      <div class="card-body">
+        <div class="card-username">@${p.username}</div>
+        <div class="card-caption">${caption}</div>
+        <div class="engagement-bar"><div class="engagement-fill" style="width:${engPct}%"></div></div>
+        <div class="card-stats">
+          <div class="stat"><div class="stat-val">${fmtNum(p.likes)}</div><div class="stat-key">좋아요</div></div>
+          <div class="stat"><div class="stat-val">${fmtNum(p.comments)}</div><div class="stat-key">댓글</div></div>
+          <div class="stat"><div class="stat-val">${followers}</div><div class="stat-key">팔로워</div></div>
+        </div>
+        <div class="card-footer">
+          <button class="btn-save" onclick="event.stopPropagation();toggleSave('${p.id}')">
+            ${savedIds.has(p.id)?'💔 저장취소':'💝 저장하기'}
+          </button>
+          ${p.permalink
+            ? `<a class="btn-ig" href="${p.permalink}" target="_blank" onclick="event.stopPropagation()">📸</a>`
+            : `<button class="btn-ig" onclick="event.stopPropagation()">📸</button>`
+          }
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function imgFail(id, i) {
+  const w = document.getElementById('cimg-' + id);
+  if (w) {
+    const img = w.querySelector('img');
+    if (img) img.outerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:60px">${getEmoji(i)}</div>`;
+  }
+}
+
+// ── 모달 ─────────────────────────────────────────────
+function openModal(id) {
+  const p = allPosts.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('modalTitle').textContent = '@' + p.username;
+  document.getElementById('modalBody').innerHTML = `
+    <div class="modal-img">
+      ${p.imgUrl && p._real
+        ? `<img src="${p.imgUrl}" alt="" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;font-size:72px\\'>📷</div>'">`
+        : '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:72px">📷</div>'}
+    </div>
+    <div class="modal-stats">
+      <div class="modal-stat"><div class="modal-stat-val">${fmtNum(p.likes)}</div><div class="modal-stat-key">좋아요</div></div>
+      <div class="modal-stat"><div class="modal-stat-val">${fmtNum(p.comments)}</div><div class="modal-stat-key">댓글</div></div>
+      <div class="modal-stat"><div class="modal-stat-val">${p.followers != null ? fmtNum(p.followers) : '—'}</div><div class="modal-stat-key">팔로워</div></div>
+    </div>
+    <div class="modal-caption">${p.caption || '(캡션 없음)'}</div>
+    <div class="modal-actions">
+      <button class="modal-btn primary" onclick="toggleSave('${p.id}');closeModalDirect()">
+        ${savedIds.has(p.id)?'💔 저장 취소':'💝 저장하기'}
+      </button>
+      ${p.permalink
+        ? `<a class="modal-btn secondary" href="${p.permalink}" target="_blank">📸 Instagram 보기</a>`
+        : `<button class="modal-btn secondary" onclick="showToast('링크 없음')">📸 Instagram 보기</button>`
+      }
+    </div>`;
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function closeModal(e) { if (e.target === document.getElementById('modalOverlay')) closeModalDirect(); }
+function closeModalDirect() { document.getElementById('modalOverlay').classList.remove('open'); renderCards(allPosts); }
+
+// ── 저장 ─────────────────────────────────────────────
+function toggleSave(id) {
+  const p = allPosts.find(x => x.id === id);
+  if (!p) return;
+  if (savedIds.has(id)) { savedIds.delete(id); showToast('저장을 취소했어요'); }
+  else { savedIds.add(id); showToast('💝 @' + p.username + ' 저장!'); }
+  document.getElementById('savedBadge').textContent = `💝 저장됨 ${savedIds.size}개`;
+  renderSaved(); renderCards(allPosts);
+}
+
+function renderSaved() {
+  const saved = allPosts.filter(p => savedIds.has(p.id));
+  const list = document.getElementById('savedList');
+  if (!saved.length) {
+    list.innerHTML = `<div style="text-align:center;padding:30px 0;font-size:13px;color:var(--text-muted)">🌸 저장한 게시물이 없어요</div>`;
+    return;
+  }
+  list.innerHTML = saved.map(p => `
+    <div class="saved-item" onclick="openModal('${p.id}')">
+      <div class="saved-thumb">${p.imgUrl ? `<img src="${p.imgUrl}" alt="">` : '📷'}</div>
+      <div class="saved-info">
+        <div class="saved-name">@${p.username}</div>
+        <div class="saved-sub">${fmtNum(p.likes)}♥ · ${p.followers != null ? fmtNum(p.followers) + ' 팔로워' : ''}</div>
+      </div>
+      <button class="saved-remove" onclick="event.stopPropagation();toggleSave('${p.id}')">✕</button>
+    </div>`).join('');
+}
+
+// ── 정렬 & 필터 ───────────────────────────────────────
+function sortCards(by, btn) {
+  document.querySelectorAll('.sort-tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const sorted = [...allPosts];
+  if (by === 'likes')    sorted.sort((a,b) => b.likes - a.likes);
+  if (by === 'comments') sorted.sort((a,b) => b.comments - a.comments);
+  if (by === 'recent')   sorted.sort((a,b) => new Date(b.timestamp||0) - new Date(a.timestamp||0));
+  renderCards(sorted);
+}
+
+function selectChip(el, tag) {
+  document.getElementById('hashtagInput').value = tag;
+  renderHashtagChips(); // active 상태 재렌더
+  doSearch();
+}
+function toggleSavedPanel() {
+  panelOpen = !panelOpen;
+  document.getElementById('savedPanel').classList.toggle('open', panelOpen);
+}
+
+// ── 로딩 ─────────────────────────────────────────────
+function showLoading(tag) {
+  document.getElementById('cardsGrid').innerHTML = `
+    <div class="loading-msg">
+      <div class="loading-spinner">🔍</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px">Instagram 검색 중...</div>
+      <div style="font-size:14px;color:var(--text-muted)">#${tag} 게시물을 가져오는 중이에요<br>약 30~60초 소요될 수 있어요</div>
+    </div>`;
+  document.getElementById('resultInfo').textContent = '검색 중...';
+}
+
+// ── 설정 ─────────────────────────────────────────────
+function openSettings() {
+  const t = localStorage.getItem('ozkiz_apify_token') || APIFY_TOKEN;
+  document.getElementById('apifyTokenInput').value = t;
+  document.getElementById('settingsOverlay').classList.add('open');
+}
+function closeSettings() { document.getElementById('settingsOverlay').classList.remove('open'); }
+function saveApifyToken() {
+  const t = document.getElementById('apifyTokenInput').value.trim();
+  if (!t) return;
+  localStorage.setItem('ozkiz_apify_token', t);
+  document.getElementById('settingsMsg').innerHTML = '<span style="color:#10B981">✅ 저장됐어요!</span>';
+  setStatus('Apify 연결됨 ✓', true);
+  setTimeout(closeSettings, 1000);
+}
+function clearApifyToken() {
+  localStorage.removeItem('ozkiz_apify_token');
+  document.getElementById('apifyTokenInput').value = '';
+  document.getElementById('settingsMsg').innerHTML = '<span style="color:#6B7280">초기화됐어요</span>';
+}
+
+// ── 유틸 ─────────────────────────────────────────────
+function fmtNum(n) {
+  if (n == null) return '—';
+  return n >= 10000 ? (n/10000).toFixed(1)+'만' : n >= 1000 ? (n/1000).toFixed(1)+'천' : String(n);
+}
+function getEmoji(i) { return ['👧','🧒','👦','🌸','🎀','⭐','🌟','🦋','🌈','🍀'][i%10]; }
+function setStatus(text, live) {
+  document.getElementById('apiText').textContent = text;
+  document.getElementById('apiDot').className = 'dot' + (live ? ' live' : '');
+}
+function showBanner(type, msg) {
+  const colors = { success: ['#F0FDF4','#BBF7D0','#166534'], error: ['#FFF1F2','#FFD0D3','#9B1C1C'], warning: ['#FFFBEB','#FDE68A','#92400E'] };
+  const [bg, border, text] = colors[type] || colors.success;
+  document.getElementById('infoBanner').innerHTML =
+    `<div style="background:${bg};border:1px solid ${border};border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:${text}">${msg}</div>`;
+  setTimeout(() => { document.getElementById('infoBanner').innerHTML = ''; }, 6000);
+}
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── 시작 ─────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
