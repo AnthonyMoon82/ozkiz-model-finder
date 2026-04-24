@@ -304,7 +304,7 @@
 
 <script>
 // ── 설정 ──────────────────────────────────────────────
-const APIFY_TOKEN = 'apify_api_2EvoBCWLbblDuQ225Pl9VeNIHw9RKl10lF0b';
+const APIFY_TOKEN = ''; // 토큰은 ⚙️ 설정에서 입력 (코드에 노출 안 됨)
 const APIFY_API   = 'https://api.apify.com/v2';
 const VERSION     = 'v9';   // 배포 버전 확인용
 
@@ -368,11 +368,18 @@ function removeHashtag(i) {
 
 // ── 초기화 ────────────────────────────────────────────
 function init() {
-  setStatus('Apify 연결됨 ✓', true);
   renderHashtagChips();
-  // 버전 표시 (배포 확인용)
   document.title = `OzKiz 모델 파인더 ${VERSION}`;
-  showBanner('success', `✅ Apify 연결 완료! 해시태그를 검색해보세요 🔍 <span style="opacity:0.5;font-size:11px">${VERSION}</span>`);
+
+  const saved = localStorage.getItem('ozkiz_apify_token');
+  if (saved) {
+    setStatus('Apify 연결됨 ✓', true);
+    showBanner('success', `✅ Apify 연결 완료! 해시태그를 검색해보세요 🔍`);
+  } else {
+    setStatus('토큰 필요', false);
+    showBanner('warning', '⚙️ 먼저 <b>설정</b>에서 Apify API 토큰을 입력해주세요!');
+    setTimeout(openSettings, 800); // 자동으로 설정 모달 열기
+  }
 }
 
 // ── 실시간 필터 적용 (슬라이더 변경 시 즉시 반영) ─────
@@ -448,6 +455,13 @@ async function doSearch() {
 
   const limit = parseInt(document.getElementById('limitSlider').value) || 20;
   const token = localStorage.getItem('ozkiz_apify_token') || APIFY_TOKEN;
+
+  // 토큰 없으면 설정 모달 오픈
+  if (!token) {
+    showToast('⚙️ 설정에서 Apify 토큰을 먼저 입력해주세요!');
+    openSettings();
+    return;
+  }
 
   // 태그가 바뀌면 버퍼 초기화
   if (tag !== currentTag) {
