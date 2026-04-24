@@ -444,6 +444,16 @@ async function runApifyActor(actor, body, token) {
   } catch { return []; }
 }
 
+// ── 로딩 화면 지우기 (에러/빈 결과용) ───────────────────
+function showEmpty(msg) {
+  document.getElementById('cardsGrid').innerHTML = `
+    <div class="empty">
+      <div style="font-size:48px;margin-bottom:12px">😢</div>
+      <div style="font-size:16px;font-weight:700;color:var(--text-muted)">${msg}</div>
+    </div>`;
+  document.getElementById('searchBtn').disabled = false;
+}
+
 // ── 해시태그 검색 ─────────────────────────────────────
 async function doSearch() {
   const inputTag = document.getElementById('hashtagInput').value.replace(/^#/, '').trim();
@@ -453,10 +463,9 @@ async function doSearch() {
   const token = localStorage.getItem('ozkiz_apify_token') || APIFY_TOKEN;
   currentTag  = inputTag;
 
-  // ── 세션 초기화 (첫 검색 시) ────────────────────────
+  // ── 세션 초기화 ──────────────────────────────────────
   if (!tagQueues[inputTag]) {
-    const allTags  = getHashtags();
-    // 큐: [검색한 태그, 나머지 사이드바 태그들]
+    const allTags = getHashtags();
     tagQueues[inputTag]  = [inputTag, ...allTags.filter(t => t !== inputTag)];
     tagBuffers[inputTag] = [];
     tagShown[inputTag]   = new Set();
@@ -465,52 +474,52 @@ async function doSearch() {
   const buf   = tagBuffers[inputTag];
   const shown = tagShown[inputTag];
 
-  // ── 버퍼에 안 본 계정이 있으면 바로 다음 배치 표시 (API 호출 없음) ──
+  // ── 버퍼에 안 본 계정이 있으면 API 호출 없이 표시 ────
   const unseen = buf.filter(p => !shown.has(p.username));
   if (unseen.length >= Math.min(limit, 3)) {
     const batch = unseen.slice(0, limit);
     batch.forEach(p => shown.add(p.username));
-    currentViewBuffer = batch;   // ← 현재 배치 저장
+    currentViewBuffer = batch;
     applyFilters();
-    const left = unseen.length - batch.length;
-    showBanner('success', `🔄 다음 배치 ${batch.length}개 · 남은 계정 ${left}개`);
+    showBanner('success', `🔄 다음 배치 ${batch.length}개 · 남은 ${unseen.length - batch.length}개`);
     return;
   }
 
-  // ── 버퍼 부족 → 다음 해시태그 fetch ────────────────
+  // ── 큐 소진 → 세션 초기화 (재검색 시 처음부터) ───────
   if (tagQueues[inputTag].length === 0) {
-    // 모든 태그 소진 → 세션 초기화 후 처음부터
     delete tagQueues[inputTag];
     delete tagBuffers[inputTag];
     delete tagShown[inputTag];
-    showToast('모든 관련 태그를 다 봤어요! 처음부터 다시 시작해요 🔄');
-    await doSearch();
+    showToast('모든 태그를 다 봤어요! 처음부터 다시 시작해요 🔄');
+    document.getElementById('resultInfo').textContent = '다시 검색 버튼을 눌러주세요';
     return;
   }
 
-  const nextTag  = tagQueues[inputTag].shift();
-  const isExtra  = nextTag !== inputTag;
-
+  // ── Apify 호출 ───────────────────────────────────────
+  const nextTag = tagQueues[inputTag].shift();
   showLoading(nextTag);
   document.getElementById('searchBtn').disabled = true;
 
-  const raw = await runApifyActor(
-    'apify~instagram-hashtag-scraper',
-    { hashtags: [nextTag], resultsLimit: 30, _rid: Date.now() },
-    token
-  );
+  let raw = [];
+  try {
+    raw = await runApifyActor(
+      'apify~instagram-hashtag-scraper',
+      { hashtags: [nextTag], resultsLimit: 30, _rid: Date.now() },
+      token
+    );
+  } catch(e) { raw = []; }
 
   document.getElementById('searchBtn').disabled = false;
 
-  if (raw.length === 0 && tagQueues[inputTag].length > 0) {
-    // 이 태그에서 결과 없음 → 다음 태그로
-    showToast(`#${nextTag} 결과 없음, 다음 태그 검색 중...`);
-    await doSearch();
+  // 결과 없음 → 로딩 화면 제거 후 메시지 표시
+  if (!raw || raw.length === 0) {
+    showEmpty(`#${nextTag} 결과를 가져오지 못했어요<br><span style="font-size:13px">잠시 후 다시 검색해주세요</span>`);
+    document.getElementById('resultInfo').textContent = '#' + nextTag + ' · 결과 없음';
     return;
   }
 
-  // 새 포스트를 기존 버퍼에 추가 (전체 중복 제거)
-  const existIds  = new Set(buf.map(p => p.id));
+  // 버퍼에 추가 (중복 제거)
+  const existIds   = new Set(buf.map(p => p.id));
   const existUsers = new Set(buf.map(p => p.username));
   raw.forEach((item, i) => {
     const p = normalizePost(item, buf.length + i);
@@ -521,24 +530,22 @@ async function doSearch() {
     buf.push(p);
   });
 
-  // 새로 추가된 unseen 표시
+  // 새 unseen 표시
   const newUnseen = buf.filter(p => !shown.has(p.username));
-  if (newUnseen.length === 0 && tagQueues[inputTag].length > 0) {
-    showToast(`#${nextTag}에 새 계정 없음, 다음 태그 검색 중...`);
-    await doSearch();
+  if (newUnseen.length === 0) {
+    showEmpty(`#${nextTag}에 새 계정이 없어요<br><span style="font-size:13px">재검색하면 다음 태그 결과를 가져와요</span>`);
+    document.getElementById('resultInfo').textContent = '#' + nextTag + ' · 새 계정 없음';
     return;
   }
 
   const batch = newUnseen.slice(0, limit);
   batch.forEach(p => shown.add(p.username));
-  currentViewBuffer = batch;   // ← 현재 배치 저장 (applyFilters가 이것만 필터링)
+  currentViewBuffer = batch;
   applyFilters();
 
-  const left      = newUnseen.length - batch.length;
   const remaining = tagQueues[inputTag].length;
-  const tagNote   = isExtra ? ` · 관련 #${nextTag} 결과` : '';
-  showBanner('success',
-    `✅ ${batch.length}개 표시${tagNote} · 재검색하면 ${remaining}개 태그 더 검색 가능`);
+  const tagNote   = nextTag !== inputTag ? ` · 관련 #${nextTag} 결과` : '';
+  showBanner('success', `✅ ${batch.length}개 표시${tagNote} · 재검색하면 ${remaining}개 태그 더`);
 }
 
 // ── 카드 렌더링 ───────────────────────────────────────
