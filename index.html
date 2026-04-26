@@ -489,9 +489,9 @@ async function doSearch() {
   let raw = [];
   try {
     const res = await fetch(
-      `${APIFY_API}/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${token}&timeout=120&memory=256`,
+      `${APIFY_API}/acts/apify~instagram-hashtag-scraper/run-sync-get-dataset-items?token=${token}&timeout=120&memory=256`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ search: tag, searchType: 'hashtag', searchLimit: 1, resultsLimit: 30 }) }
+        body: JSON.stringify({ hashtags: [tag], resultsLimit: 30, _rid: Date.now() }) }
     );
     if (res.ok) {
       const data = await res.json();
