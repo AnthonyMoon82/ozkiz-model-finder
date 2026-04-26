@@ -370,16 +370,8 @@ function removeHashtag(i) {
 function init() {
   renderHashtagChips();
   document.title = `OzKiz 모델 파인더 ${VERSION}`;
-
-  const saved = localStorage.getItem('ozkiz_apify_token');
-  if (saved) {
-    setStatus('Apify 연결됨 ✓', true);
-    showBanner('success', `✅ Apify 연결 완료! 해시태그를 검색해보세요 🔍`);
-  } else {
-    setStatus('토큰 필요', false);
-    showBanner('warning', '⚙️ 먼저 <b>설정</b>에서 Apify API 토큰을 입력해주세요!');
-    setTimeout(openSettings, 800); // 자동으로 설정 모달 열기
-  }
+  setStatus('Apify 연결됨 ✓', true);
+  showBanner('success', '✅ 연결 완료! 해시태그를 검색해보세요 🔍');
 }
 
 // ── 실시간 필터 적용 (슬라이더 변경 시 즉시 반영) ─────
@@ -454,14 +446,6 @@ async function doSearch() {
   if (!tag) { showToast('해시태그를 입력해주세요'); return; }
 
   const limit = parseInt(document.getElementById('limitSlider').value) || 20;
-  const token = localStorage.getItem('ozkiz_apify_token') || APIFY_TOKEN;
-
-  // 토큰 없으면 설정 모달 오픈
-  if (!token) {
-    showToast('⚙️ 설정에서 Apify 토큰을 먼저 입력해주세요!');
-    openSettings();
-    return;
-  }
 
   // 태그가 바뀌면 버퍼 초기화
   if (tag !== currentTag) {
@@ -488,11 +472,12 @@ async function doSearch() {
 
   let raw = [];
   try {
-    const res = await fetch(
-      `${APIFY_API}/acts/apify~instagram-hashtag-scraper/run-sync-get-dataset-items?token=${token}&timeout=120&memory=256`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hashtags: [tag], resultsLimit: 30, _rid: Date.now() }) }
-    );
+    // Vercel 서버리스 함수를 통해 호출 (토큰은 서버에서 관리)
+    const res = await fetch('/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag, limit: 30 })
+    });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) raw = data;
