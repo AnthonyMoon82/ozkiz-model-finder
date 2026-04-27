@@ -501,22 +501,18 @@ async function doSearch() {
     return;
   }
 
-  // 새로 검색해온 결과를 해당 해시태그(fetchTag) 캐시에 추가 저장
-  if (!tagBuffers[fetchTag]) tagBuffers[fetchTag] = [];
-  if (!tagShownUsers[fetchTag]) tagShownUsers[fetchTag] = new Set();
-
-  const existIds = new Set(tagBuffers[fetchTag].map(p => p.id));
-  const existUsers = new Set(tagBuffers[fetchTag].map(p => p.username));
+  // 검색 결과를 원래 태그(tag)의 버퍼에 추가 (표시 시 tagBuffers[tag]를 읽으므로)
+  const existIds   = new Set(tagBuffers[tag].map(p => p.id));
+  const existUsers = new Set(tagBuffers[tag].map(p => p.username));
 
   raw.forEach((item, i) => {
-    const p = normalizePost(item, tagBuffers[fetchTag].length + i);
+    const p = normalizePost(item, tagBuffers[tag].length + i);
     if (existIds.has(p.id)) return;
     if (p.username !== '알수없음' && existUsers.has(p.username)) return;
     existIds.add(p.id); existUsers.add(p.username);
-    tagBuffers[fetchTag].push(p);
+    tagBuffers[tag].push(p);  // ← 원래 태그 버퍼에 저장
   });
 
-  // 원래 사용자가 검색하려던 tag의 캐시에서 다시 unseen 추출 후 화면에 표시
   const finalUnseen = tagBuffers[tag].filter(p => !tagShownUsers[tag].has(p.username));
   const batch = finalUnseen.slice(0, limit);
   batch.forEach(p => tagShownUsers[tag].add(p.username));
@@ -675,7 +671,8 @@ function sortCards(by, btn) {
 
 function selectChip(el, tag) {
   document.getElementById('hashtagInput').value = tag;
-  renderHashtagChips(); // active 상태 재렌더
+  tagRotation[tag] = 0;  // 칩 클릭 시 항상 해당 태그부터 검색
+  renderHashtagChips();
   doSearch();
 }
 function toggleSavedPanel() {
