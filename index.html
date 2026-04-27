@@ -482,7 +482,11 @@ async function doSearch() {
 
   let raw = [];
   try {
-    const res = await fetch(`/api/search?hashtag=${encodeURIComponent(fetchTag)}`);
+    const res = await fetch('/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag: fetchTag, limit: 30 })
+    });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) raw = data;

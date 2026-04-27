@@ -1,14 +1,11 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
-  // GET과 POST 모두 지원
-  const tag   = req.method === 'GET' ? req.query.hashtag : req.body?.tag;
-  const limit = parseInt(req.method === 'GET' ? req.query.limit : req.body?.limit) || 30;
-
-  if (!tag) { res.status(400).json({ error: 'hashtag required' }); return; }
+  const { tag, limit } = req.body || {};
+  if (!tag) { res.status(400).json({ error: 'tag required' }); return; }
 
   const token = process.env.APIFY_TOKEN;
   if (!token) { res.status(500).json({ error: 'APIFY_TOKEN not set' }); return; }
@@ -19,7 +16,7 @@ export default async function handler(req, res) {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hashtags: [tag], resultsLimit: limit, _rid: Date.now() })
+        body: JSON.stringify({ hashtags: [tag], resultsLimit: parseInt(limit) || 30, _rid: Date.now() })
       }
     );
     const data = await apifyRes.json();
