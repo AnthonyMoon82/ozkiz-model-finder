@@ -452,15 +452,12 @@ async function doSearch() {
   const limit = parseInt(document.getElementById('limitSlider').value) || 20;
   currentTag = tag;
 
-  // 해시태그별 기억공간(캐시) 초기 생성 (절대 지우지 않음)
-  if (!tagBuffers[tag]) tagBuffers[tag] = [];
+  // 태그별 캐시 초기화 (처음 검색 시에만)
+  if (!tagBuffers[tag])    tagBuffers[tag]    = [];
   if (!tagShownUsers[tag]) tagShownUsers[tag] = new Set();
-  if (tagRotation[tag] === undefined) tagRotation[tag] = 0;
 
-  // 현재 해시태그의 버퍼에서 '아직 안 본 계정' 필터링
+  // 버퍼에 아직 안 본 계정이 있으면 API 호출 없이 다음 배치 표시
   const unseen = tagBuffers[tag].filter(p => !tagShownUsers[tag].has(p.username));
-
-  // 안 본 계정이 충분히 남아있으면 API 호출 없이 바로 표시
   if (unseen.length >= Math.min(limit, 3)) {
     const batch = unseen.slice(0, limit);
     batch.forEach(p => tagShownUsers[tag].add(p.username));
@@ -471,13 +468,8 @@ async function doSearch() {
     return;
   }
 
-  // 버퍼가 부족하면 API 호출 (순환 검색 로직)
-  const allTags = [tag, ...getHashtags().filter(t => t !== tag)];
-  const rotIdx = tagRotation[tag] || 0;
-  const fetchTag = allTags[rotIdx % allTags.length];
-  tagRotation[tag] = rotIdx + 1;
-
-  showLoading(fetchTag);
+  // 버퍼 소진 → Apify에서 같은 태그로 새로 fetch (최신 포스트 포함)
+  showLoading(tag);
   document.getElementById('searchBtn').disabled = true;
 
   let raw = [];
@@ -485,7 +477,7 @@ async function doSearch() {
     const res = await fetch('/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tag: fetchTag, limit: 30 })
+      body: JSON.stringify({ tag, limit: 100 })  // 많이 가져와서 재검색 여유분 확보
     });
     if (res.ok) {
       const data = await res.json();
@@ -497,32 +489,46 @@ async function doSearch() {
 
   if (raw.length === 0) {
     document.getElementById('cardsGrid').innerHTML = `<div class="empty"><div style="font-size:48px">😢</div><div style="font-size:16px;font-weight:700">결과를 가져오지 못했어요</div></div>`;
-    document.getElementById('resultInfo').textContent = '#' + fetchTag + ' · 결과 없음';
+    document.getElementById('resultInfo').textContent = '#' + tag + ' · 결과 없음';
     return;
   }
 
-  // 검색 결과를 원래 태그(tag)의 버퍼에 추가 (표시 시 tagBuffers[tag]를 읽으므로)
-  const existIds   = new Set(tagBuffers[tag].map(p => p.id));
-  const existUsers = new Set(tagBuffers[tag].map(p => p.username));
-
+  // 새로 받은 결과 중 한 번도 본 적 없는 계정만 엄격하게 필터링
+  const newPosts = [];
   raw.forEach((item, i) => {
-    const p = normalizePost(item, tagBuffers[tag].length + i);
-    if (existIds.has(p.id)) return;
-    if (p.username !== '알수없음' && existUsers.has(p.username)) return;
-    existIds.add(p.id); existUsers.add(p.username);
-    tagBuffers[tag].push(p);  // ← 원래 태그 버퍼에 저장
+    const p = normalizePost(item, i);
+    // 이미 본 계정이면 무조건 버림
+    if (tagShownUsers[tag].has(p.username)) return;
+    // 이번 fetch에서 중복도 제거
+    if (newPosts.some(x => x.username === p.username)) return;
+    if (p.username === '알수없음') return;
+    newPosts.push(p);
   });
 
-  const finalUnseen = tagBuffers[tag].filter(p => !tagShownUsers[tag].has(p.username));
-  const batch = finalUnseen.slice(0, limit);
+  // 진짜 새로운 계정이 0개면 솔직하게 안내하고 멈춤 (재탕 없음)
+  if (newPosts.length === 0) {
+    document.getElementById('cardsGrid').innerHTML = `
+      <div class="empty">
+        <div style="font-size:48px;margin-bottom:12px">✅</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:8px">#${tag}의 최근 게시물은 모두 확인했어요</div>
+        <div style="font-size:13px;color:var(--text-muted)">다른 해시태그를 검색해 보세요!</div>
+      </div>`;
+    document.getElementById('resultInfo').textContent = '#' + tag + ' · 모두 확인 완료';
+    return;
+  }
+
+  // 새 계정을 버퍼에 추가
+  tagBuffers[tag].push(...newPosts);
+
+  // 첫 배치 표시
+  const batch = newPosts.slice(0, limit);
   batch.forEach(p => tagShownUsers[tag].add(p.username));
   currentViewBuffer = batch;
   applyFilters();
 
-  const isExtra = fetchTag !== tag;
-  const left = finalUnseen.length - batch.length;
-  const tagNote = isExtra ? ` · 관련 #${fetchTag} 결과` : '';
-  showBanner('success', `✅ ${batch.length}개 표시${tagNote}${left > 0 ? ' · 재검색하면 '+left+'개 더' : ''}`);
+  const left = newPosts.length - batch.length;
+  showBanner('success',
+    `✅ #${tag} 새 계정 ${batch.length}개 표시${left > 0 ? ' · 재검색하면 '+left+'개 더' : ''}`);
 }
 
 // ── 카드 렌더링 ───────────────────────────────────────
@@ -671,7 +677,7 @@ function sortCards(by, btn) {
 
 function selectChip(el, tag) {
   document.getElementById('hashtagInput').value = tag;
-  tagRotation[tag] = 0;  // 칩 클릭 시 항상 해당 태그부터 검색
+  // rotation·shown 기록 유지 → doSearch가 이어서 다음 새 결과 가져옴
   renderHashtagChips();
   doSearch();
 }
