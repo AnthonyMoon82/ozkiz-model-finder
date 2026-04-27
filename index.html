@@ -196,29 +196,6 @@
       </div>
     </div>
 
-    <div class="sidebar-section">
-      <div class="section-title">👥 팔로워 범위</div>
-      <div class="filter-row">
-        <div class="filter-label"><span>최소</span><span id="followerMinVal">0명</span></div>
-        <input type="range" id="followerMinSlider" min="0" max="50000" step="100" value="0"
-          oninput="
-            const v=parseInt(this.value);
-            const maxV=parseInt(document.getElementById('followerMaxSlider').value);
-            if(v>maxV){document.getElementById('followerMaxSlider').value=v;document.getElementById('followerMaxVal').textContent=v.toLocaleString()+'명';}
-            document.getElementById('followerMinVal').textContent=v.toLocaleString()+'명';
-            applyFilters()">
-      </div>
-      <div class="filter-row" style="margin-top:8px">
-        <div class="filter-label"><span>최대</span><span id="followerMaxVal">제한없음</span></div>
-        <input type="range" id="followerMaxSlider" min="0" max="50000" step="100" value="50000"
-          oninput="
-            const v=parseInt(this.value);
-            const minV=parseInt(document.getElementById('followerMinSlider').value);
-            if(v<minV){document.getElementById('followerMinSlider').value=v;document.getElementById('followerMinVal').textContent=v.toLocaleString()+'명';}
-            document.getElementById('followerMaxVal').textContent=v>=50000?'제한없음':v.toLocaleString()+'명';
-            applyFilters()">
-      </div>
-    </div>
 
     <div class="sidebar-section">
       <div class="section-title">📊 검색 결과 수</div>
@@ -320,7 +297,7 @@ const tagRotation = {};
 
 // ── 해시태그 관리 (localStorage) ──────────────────────
 const HASHTAGS_KEY = 'ozkiz_hashtags';
-const DEFAULT_HASHTAGS = ['키즈모델','아동모델','키즈스냅','베이비모델','유아모델','키즈패션'];
+const DEFAULT_HASHTAGS = ['키즈모델','아동모델','유아모델','주니어모델','아역배우','키즈패션','키즈오오티디','피팅모델','여아모델','남아모델'];
 
 function getHashtags() {
   try { return JSON.parse(localStorage.getItem(HASHTAGS_KEY)) || DEFAULT_HASHTAGS.slice(); }
@@ -376,37 +353,17 @@ function init() {
   showBanner('success', '✅ 연결 완료! 해시태그를 검색해보세요 🔍');
 }
 
-// ── 실시간 필터 적용 (슬라이더 변경 시 즉시 반영) ─────
+// ── 실시간 필터 적용 ─────────────────────────────────
 function applyFilters() {
-  // currentViewBuffer: doSearch가 설정한 "현재 배치" 기준으로만 필터링
-  // → 전체 버퍼(tagBuffers)를 쓰면 이미 본 결과가 다시 나오는 버그 발생
   if (!currentViewBuffer.length) {
-    renderCards([]);   // ← 빈 화면 명시적 표시 (이전 결과 남는 버그 방지)
+    renderCards([]);
     return;
   }
-
-  const limit      = parseInt(document.getElementById('limitSlider').value)      || 20;
-  const minFollow  = parseInt(document.getElementById('followerMinSlider').value) || 0;
-  const maxRaw     = parseInt(document.getElementById('followerMaxSlider').value);
-  const maxFollow  = maxRaw >= 50000 ? Infinity : maxRaw;
-
-  const hasFilter = minFollow > 0 || maxFollow < Infinity;
-  const filtered = currentViewBuffer.filter(p => {
-    if (p.followers == null) return !hasFilter; // 필터 없으면 통과, 있으면 제외
-    if (p.followers < minFollow) return false;
-    if (p.followers > maxFollow) return false;
-    return true;
-  });
-
-  allPosts = filtered.slice(0, limit);
+  const limit = parseInt(document.getElementById('limitSlider').value) || 20;
+  allPosts = currentViewBuffer.slice(0, limit);
   sortCards('likes', document.querySelector('.sort-tab.active'));
-
-  const hiddenCount = currentViewBuffer.length - filtered.length;
-  const followInfo  = hasFilter
-    ? ` · 팔로워 ${minFollow.toLocaleString()}~${maxFollow === Infinity ? '무제한' : maxFollow.toLocaleString()}명 (${hiddenCount}개 제외)`
-    : '';
   document.getElementById('resultInfo').innerHTML =
-    `<strong>${allPosts.length}개</strong>의 계정 · <span style="color:var(--primary)">#${currentTag}</span>${followInfo}`;
+    `<strong>${allPosts.length}개</strong>의 계정 · <span style="color:var(--primary)">#${currentTag}</span>`;
 }
 
 // ── Apify 데이터 정규화 ───────────────────────────────
@@ -477,7 +434,7 @@ async function doSearch() {
     const res = await fetch('/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tag, limit: 100 })  // 많이 가져와서 재검색 여유분 확보
+      body: JSON.stringify({ tag, limit: 300 })  // 한 번에 300개 스캔
     });
     if (res.ok) {
       const data = await res.json();
