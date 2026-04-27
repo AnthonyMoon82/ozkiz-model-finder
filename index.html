@@ -306,7 +306,7 @@
 // ── 설정 ──────────────────────────────────────────────
 const APIFY_TOKEN = ''; // 토큰은 ⚙️ 설정에서 입력 (코드에 노출 안 됨)
 const APIFY_API   = 'https://api.apify.com/v2';
-const VERSION     = 'v9';   // 배포 버전 확인용
+const VERSION     = 'v10';   // 배포 버전 확인용
 
 let allPosts          = [];
 let currentViewBuffer = [];  // 현재 화면 배치 (팔로워 필터 적용 전 원본)
@@ -379,7 +379,10 @@ function init() {
 function applyFilters() {
   // currentViewBuffer: doSearch가 설정한 "현재 배치" 기준으로만 필터링
   // → 전체 버퍼(tagBuffers)를 쓰면 이미 본 결과가 다시 나오는 버그 발생
-  if (!currentViewBuffer.length) return;
+  if (!currentViewBuffer.length) {
+    renderCards([]);   // ← 빈 화면 명시적 표시 (이전 결과 남는 버그 방지)
+    return;
+  }
 
   const limit      = parseInt(document.getElementById('limitSlider').value)      || 20;
   const minFollow  = parseInt(document.getElementById('followerMinSlider').value) || 0;
@@ -517,7 +520,17 @@ async function doSearch() {
 
   // 새로 추가된 unseen 표시
   const newUnseen = buf.filter(p => !shown.has(p.username));
-  const batch     = newUnseen.slice(0, limit);
+
+  // ★ 핵심 버그 수정: newUnseen이 없을 때 그냥 return하면
+  //   이전 검색 결과가 화면에 그대로 남음 → 명시적으로 빈 화면 표시
+  if (newUnseen.length === 0) {
+    renderCards([]);
+    document.getElementById('resultInfo').textContent = '새로운 계정이 없어요 · 재검색하면 다음 태그 검색';
+    showBanner('warning', `🔄 #${fetchTag}에 새 계정이 없어요. 재검색하면 다음 관련 태그를 검색해요`);
+    return;
+  }
+
+  const batch = newUnseen.slice(0, limit);
   batch.forEach(p => shown.add(p.username));
   currentViewBuffer = batch;
   applyFilters();
