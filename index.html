@@ -61,7 +61,7 @@
   .sort-tab { padding: 7px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: var(--text-muted); transition: all 0.2s; }
   .sort-tab.active { background: var(--primary); color: white; }
 
-  .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; }
+  .cards-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px; }
   .card { background: white; border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; position: relative; }
   .card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(232,25,44,0.15); }
   .card-image { width: 100%; aspect-ratio: 4/5; object-fit: cover; background: #F3E0E0; display: flex; align-items: center; justify-content: center; font-size: 60px; position: relative; overflow: hidden; }
@@ -198,9 +198,9 @@
 
 
     <div class="sidebar-section">
-      <div class="section-title">📊 검색 결과 수</div>
+      <div class="section-title">📊 한 번에 볼 계정 수</div>
       <div class="filter-row">
-        <div class="filter-label"><span>최대 결과</span><span id="limitVal">20개</span></div>
+        <div class="filter-label"><span>최대</span><span id="limitVal">20개</span></div>
         <input type="range" id="limitSlider" min="5" max="50" step="5" value="20"
           oninput="document.getElementById('limitVal').textContent=this.value+'개'; applyFilters()">
       </div>
@@ -351,6 +351,12 @@ function init() {
   document.title = `OzKiz 모델 파인더 ${VERSION}`;
   setStatus('Apify 연결됨 ✓', true);
   showBanner('success', '✅ 연결 완료! 해시태그를 검색해보세요 🔍');
+
+  // localStorage에서 저장된 모델 불러오기
+  const savedList = loadSavedFromStorage();
+  savedIds = new Set(savedList.map(p => p.id));
+  document.getElementById('savedBadge').textContent = `💝 저장됨 ${savedIds.size}개`;
+  renderSaved();
 }
 
 // ── 실시간 필터 적용 ─────────────────────────────────
@@ -593,29 +599,53 @@ function openModal(id) {
 function closeModal(e) { if (e.target === document.getElementById('modalOverlay')) closeModalDirect(); }
 function closeModalDirect() { document.getElementById('modalOverlay').classList.remove('open'); renderCards(allPosts); }
 
-// ── 저장 ─────────────────────────────────────────────
+// ── 저장 (localStorage 영구 저장) ────────────────────
+const SAVED_KEY = 'ozkiz_saved_models';
+
+function loadSavedFromStorage() {
+  try {
+    const data = JSON.parse(localStorage.getItem(SAVED_KEY)) || [];
+    savedIds = new Set(data.map(p => p.id));
+    return data;
+  } catch { return []; }
+}
+
+function persistSaved(savedList) {
+  localStorage.setItem(SAVED_KEY, JSON.stringify(savedList));
+}
+
 function toggleSave(id) {
-  const p = allPosts.find(x => x.id === id);
+  const p = allPosts.find(x => x.id === id) || loadSavedFromStorage().find(x => x.id === id);
   if (!p) return;
-  if (savedIds.has(id)) { savedIds.delete(id); showToast('저장을 취소했어요'); }
-  else { savedIds.add(id); showToast('💝 @' + p.username + ' 저장!'); }
+
+  let savedList = loadSavedFromStorage();
+  if (savedIds.has(id)) {
+    savedIds.delete(id);
+    savedList = savedList.filter(x => x.id !== id);
+    showToast('저장을 취소했어요');
+  } else {
+    savedIds.add(id);
+    savedList.push(p);
+    showToast('💝 @' + p.username + ' 저장!');
+  }
+  persistSaved(savedList);
   document.getElementById('savedBadge').textContent = `💝 저장됨 ${savedIds.size}개`;
   renderSaved(); renderCards(allPosts);
 }
 
 function renderSaved() {
-  const saved = allPosts.filter(p => savedIds.has(p.id));
+  const savedList = loadSavedFromStorage();
   const list = document.getElementById('savedList');
-  if (!saved.length) {
-    list.innerHTML = `<div style="text-align:center;padding:30px 0;font-size:13px;color:var(--text-muted)">🌸 저장한 게시물이 없어요</div>`;
+  if (!savedList.length) {
+    list.innerHTML = `<div style="text-align:center;padding:30px 0;font-size:13px;color:var(--text-muted)">🌸 저장한 모델이 없어요</div>`;
     return;
   }
-  list.innerHTML = saved.map(p => `
+  list.innerHTML = savedList.map(p => `
     <div class="saved-item" onclick="openModal('${p.id}')">
       <div class="saved-thumb">${p.imgUrl ? `<img src="${p.imgUrl}" alt="">` : '📷'}</div>
       <div class="saved-info">
         <div class="saved-name">@${p.username}</div>
-        <div class="saved-sub">${fmtNum(p.likes)}♥ · ${p.followers != null ? fmtNum(p.followers) + ' 팔로워' : ''}</div>
+        <div class="saved-sub">${fmtNum(p.likes)}♥</div>
       </div>
       <button class="saved-remove" onclick="event.stopPropagation();toggleSave('${p.id}')">✕</button>
     </div>`).join('');
