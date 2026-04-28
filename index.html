@@ -170,16 +170,6 @@
 <div class="container">
   <aside class="sidebar">
     <div class="sidebar-section">
-      <div class="section-title">🔍 해시태그 검색</div>
-      <div class="search-box">
-        <span class="search-icon">＃</span>
-        <input type="text" id="hashtagInput" placeholder="해시태그 입력..." value="키즈모델">
-      </div>
-      <div style="height:8px"></div>
-      <button class="search-btn" id="searchBtn" onclick="doSearch()">🔍 검색하기</button>
-    </div>
-
-    <div class="sidebar-section">
       <div class="section-title">⚡ 해시태그 목록</div>
       <div class="hashtag-chips" id="hashtagChips"></div>
       <div style="display:flex;gap:6px;margin-top:10px">
@@ -194,6 +184,8 @@
           +
         </button>
       </div>
+      <div style="height:10px"></div>
+      <button class="search-btn" id="searchBtn" onclick="doSearch()">✨ 다음 검색 결과 보기</button>
     </div>
 
 
@@ -307,9 +299,8 @@ function saveHashtags(list) { localStorage.setItem(HASHTAGS_KEY, JSON.stringify(
 
 function renderHashtagChips() {
   const list = getHashtags();
-  const current = document.getElementById('hashtagInput').value.replace(/^#/,'').trim();
   document.getElementById('hashtagChips').innerHTML = list.map((tag, i) => `
-    <div class="chip ${tag === current ? 'active' : ''}"
+    <div class="chip ${tag === currentTag ? 'active' : ''}"
       style="display:inline-flex;align-items:center;gap:4px"
       onclick="selectChip(this,'${tag}')">
       #${tag}
@@ -409,8 +400,8 @@ async function runApifyActor(actor, body, token) {
 // ── 해시태그 검색 (단순 버전) ──────────────────────────
 // 검색 버튼을 누르면 해당 태그 하나만 검색
 async function doSearch() {
-  const tag = document.getElementById('hashtagInput').value.replace(/^#/, '').trim();
-  if (!tag) { showToast('해시태그를 입력해주세요'); return; }
+  const tag = currentTag;
+  if (!tag) { showToast('해시태그를 먼저 선택해주세요'); return; }
 
   const limit = parseInt(document.getElementById('limitSlider').value) || 20;
   currentTag = tag;
@@ -641,11 +632,13 @@ function renderSaved() {
     return;
   }
   list.innerHTML = savedList.map(p => `
-    <div class="saved-item" onclick="openModal('${p.id}')">
+    <div class="saved-item"
+      onclick="window.open('https://www.instagram.com/${p.username}/','_blank')"
+      style="cursor:pointer" title="@${p.username} 인스타그램 열기">
       <div class="saved-thumb">${p.imgUrl ? `<img src="${p.imgUrl}" alt="">` : '📷'}</div>
       <div class="saved-info">
         <div class="saved-name">@${p.username}</div>
-        <div class="saved-sub">${fmtNum(p.likes)}♥</div>
+        <div class="saved-sub">${fmtNum(p.likes)}♥ · 📸 클릭하면 인스타 이동</div>
       </div>
       <button class="saved-remove" onclick="event.stopPropagation();toggleSave('${p.id}')">✕</button>
     </div>`).join('');
@@ -663,9 +656,8 @@ function sortCards(by, btn) {
 }
 
 function selectChip(el, tag) {
-  document.getElementById('hashtagInput').value = tag;
-  // rotation·shown 기록 유지 → doSearch가 이어서 다음 새 결과 가져옴
-  renderHashtagChips();
+  currentTag = tag;          // 전역 변수에 선택된 태그 저장
+  renderHashtagChips();      // 선택된 칩 활성화 표시
   doSearch();
 }
 function toggleSavedPanel() {
