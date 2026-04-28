@@ -158,7 +158,13 @@
     OzKiz 모델 파인더
   </div>
   <div class="header-right">
-    <div class="stat-badge" id="savedBadge">💝 저장됨 0개</div>
+    <div class="stat-badge" id="savedBadge"
+      onclick="toggleSavedPanel()"
+      style="cursor:pointer;display:flex;align-items:center;gap:6px;transition:background 0.2s"
+      onmouseover="this.style.background='rgba(255,255,255,0.35)'"
+      onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+      💝 저장됨 0개 <span id="savedToggleIcon" style="font-size:10px">▶</span>
+    </div>
     <button class="header-btn" onclick="openSettings()">⚙️ 설정</button>
     <div class="api-status">
       <div class="dot" id="apiDot"></div>
@@ -207,27 +213,30 @@
   <main class="main">
     <div id="infoBanner"></div>
     <div class="toolbar">
-      <div class="result-info" id="resultInfo">검색 버튼을 눌러주세요</div>
+      <div class="result-info" id="resultInfo">👈 왼쪽에서 해시태그를 클릭해 새로운 모델을 찾아보세요 ✨</div>
       <div class="sort-tabs">
         <button class="sort-tab active" onclick="sortCards('likes',this)">좋아요순</button>
         <button class="sort-tab" onclick="sortCards('comments',this)">댓글순</button>
         <button class="sort-tab" onclick="sortCards('recent',this)">최신순</button>
       </div>
     </div>
-    <div id="cardsGrid" class="cards-grid"></div>
+    <div id="cardsGrid" class="cards-grid">
+      <div class="empty" style="grid-column: 1/-1; text-align: center; padding: 100px 20px; color: var(--text-muted);">
+        <div style="font-size: 64px; margin-bottom: 20px;">📸</div>
+        <div style="font-size: 18px; font-weight: 700; color: var(--text);">발굴하고 싶은 모델의 해시태그를 선택해 주세요!</div>
+        <div style="font-size: 14px; margin-top: 8px;">왼쪽 목록에서 해시태그를 클릭하면 스캔이 시작됩니다.</div>
+      </div>
+    </div>
   </main>
 
   <aside class="saved-panel" id="savedPanel">
     <div class="saved-inner">
-      <div class="section-title" style="margin-bottom:16px">💝 저장한 게시물</div>
       <div id="savedList">
-        <div style="text-align:center;padding:30px 0;font-size:13px;color:var(--text-muted)">🌸 저장한 게시물이 없어요</div>
+        <div style="text-align:center;padding:30px 0;font-size:13px;color:var(--text-muted)">🌸 저장한 모델이 없어요</div>
       </div>
     </div>
   </aside>
 </div>
-
-<button class="fab" onclick="toggleSavedPanel()">💝</button>
 
 <!-- Settings Modal -->
 <div id="settingsOverlay" onclick="if(event.target===this)closeSettings()">
@@ -663,6 +672,8 @@ function selectChip(el, tag) {
 function toggleSavedPanel() {
   panelOpen = !panelOpen;
   document.getElementById('savedPanel').classList.toggle('open', panelOpen);
+  const icon = document.getElementById('savedToggleIcon');
+  if (icon) icon.textContent = panelOpen ? '◀' : '▶';
 }
 
 // ── 로딩 ─────────────────────────────────────────────
