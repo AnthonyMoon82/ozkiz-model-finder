@@ -368,8 +368,14 @@ function applyFilters() {
   const limit = parseInt(document.getElementById('limitSlider').value) || 20;
   allPosts = currentViewBuffer.slice(0, limit);
   sortCards('likes', document.querySelector('.sort-tab.active'));
+
+  // 전체 수집된 고유 계정 수 표시 (예: 20 / 154개의 계정 · #키즈모델)
+  const totalCollected = tagBuffers[currentTag] ? tagBuffers[currentTag].length : 0;
+  const totalStr = totalCollected > allPosts.length
+    ? `<strong>${allPosts.length}</strong> / ${totalCollected}개의 계정`
+    : `<strong>${allPosts.length}개</strong>의 계정`;
   document.getElementById('resultInfo').innerHTML =
-    `<strong>${allPosts.length}개</strong>의 계정 · <span style="color:var(--primary)">#${currentTag}</span>`;
+    `${totalStr} · <span style="color:var(--primary)">#${currentTag}</span>`;
 }
 
 // ── Apify 데이터 정규화 ───────────────────────────────
