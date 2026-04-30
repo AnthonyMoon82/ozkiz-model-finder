@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OzKiz 모델 파인더</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   :root {
@@ -346,17 +347,14 @@ function removeHashtag(i) {
 // (postBuffers, shownUserSets 는 tagBuffers/tagShown 으로 통합됨)
 
 // ── 초기화 ────────────────────────────────────────────
-function init() {
+async function init() {
   renderHashtagChips();
   document.title = `OzKiz 모델 파인더 ${VERSION}`;
   setStatus('Apify 연결됨 ✓', true);
   showBanner('success', '✅ 연결 완료! 해시태그를 검색해보세요 🔍');
 
-  // localStorage에서 저장된 모델 불러오기
-  const savedList = loadSavedFromStorage();
-  savedIds = new Set(savedList.map(p => p.id));
-  document.getElementById('savedBadge').textContent = `💝 저장됨 ${savedIds.size}개`;
-  renderSaved();
+  // Supabase에서 저장된 모델 불러오기 (팀원 공유)
+  await renderSaved();
 }
 
 // ── 실시간 필터 적용 ─────────────────────────────────
@@ -605,42 +603,66 @@ function openModal(id) {
 function closeModal(e) { if (e.target === document.getElementById('modalOverlay')) closeModalDirect(); }
 function closeModalDirect() { document.getElementById('modalOverlay').classList.remove('open'); renderCards(allPosts); }
 
-// ── 저장 (localStorage 영구 저장) ────────────────────
-const SAVED_KEY = 'ozkiz_saved_models';
+// ── Supabase 설정 (팀원 공유 저장) ──────────────────────
+const SUPABASE_URL = 'https://qbrpjngmuxcybhnogkfr.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_wI9_TBrFW8Li1KpBDJ01Lw_fBSGfkl_';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-function loadSavedFromStorage() {
+async function loadSavedFromDB() {
   try {
-    const data = JSON.parse(localStorage.getItem(SAVED_KEY)) || [];
-    savedIds = new Set(data.map(p => p.id));
-    return data;
-  } catch { return []; }
+    const { data, error } = await db
+      .from('saved_models')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(row => row.post_data);
+  } catch(e) {
+    console.error('저장 목록 로드 실패:', e);
+    return [];
+  }
 }
 
-function persistSaved(savedList) {
-  localStorage.setItem(SAVED_KEY, JSON.stringify(savedList));
+async function saveModelToDB(p) {
+  try {
+    const { error } = await db
+      .from('saved_models')
+      .insert({ id: p.id, post_data: p });
+    if (error) throw error;
+  } catch(e) { console.error('저장 실패:', e); }
 }
 
-function toggleSave(id) {
-  const p = allPosts.find(x => x.id === id) || loadSavedFromStorage().find(x => x.id === id);
-  if (!p) return;
+async function deleteModelFromDB(id) {
+  try {
+    const { error } = await db
+      .from('saved_models')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  } catch(e) { console.error('삭제 실패:', e); }
+}
 
-  let savedList = loadSavedFromStorage();
+async function toggleSave(id) {
+  const p = allPosts.find(x => x.id === id);
   if (savedIds.has(id)) {
     savedIds.delete(id);
-    savedList = savedList.filter(x => x.id !== id);
+    await deleteModelFromDB(id);
     showToast('저장을 취소했어요');
   } else {
+    if (!p) return;
     savedIds.add(id);
-    savedList.push(p);
+    await saveModelToDB(p);
     showToast('💝 @' + p.username + ' 저장!');
   }
-  persistSaved(savedList);
   document.getElementById('savedBadge').textContent = `💝 저장됨 ${savedIds.size}개`;
-  renderSaved(); renderCards(allPosts);
+  await renderSaved();
+  renderCards(allPosts);
 }
 
-function renderSaved() {
-  const savedList = loadSavedFromStorage();
+async function renderSaved() {
+  const savedList = await loadSavedFromDB();
+  savedIds = new Set(savedList.map(p => p.id));
+  document.getElementById('savedBadge').textContent = `💝 저장됨 ${savedIds.size}개`;
+
   const list = document.getElementById('savedList');
   if (!savedList.length) {
     list.innerHTML = `<div style="text-align:center;padding:30px 0;font-size:13px;color:var(--text-muted)">🌸 저장한 모델이 없어요</div>`;
