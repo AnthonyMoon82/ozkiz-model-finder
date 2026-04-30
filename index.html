@@ -390,7 +390,7 @@ function normalizePost(p, i) {
   const timestamp = p.timestamp || p.takenAt || p.taken_at || '';
   const mediaType = p.type || p.mediaType || (p.isVideo ? 'Video' : 'Image');
   return {
-    id: p.id || shortCode || String(i),
+    id: p.id || shortCode || ('post_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2, 5)),
     username, fullName, followers, likes, comments,
     imgUrl, permalink, caption, timestamp,
     type: mediaType, _real: true
@@ -657,7 +657,7 @@ async function toggleSave(id) {
   }
 
   // 배지 카운트 업데이트
-  document.getElementById('savedBadge').textContent = `💝 저장됨 ${savedIds.size}개`;
+  document.getElementById('savedBadge').innerHTML = `💝 저장됨 ${savedIds.size}개 <span id="savedToggleIcon" style="font-size:10px">${panelOpen ? '◀' : '▶'}</span>`;
 
   // ── 전체 재렌더링 없이 해당 카드 DOM만 부드럽게 업데이트 ──
   const card = document.querySelector(`.card[data-post-id="${id}"]`);
@@ -681,7 +681,7 @@ async function toggleSave(id) {
 async function renderSaved() {
   const savedList = await loadSavedFromDB();
   savedIds = new Set(savedList.map(p => p.id));
-  document.getElementById('savedBadge').textContent = `💝 저장됨 ${savedIds.size}개`;
+  document.getElementById('savedBadge').innerHTML = `💝 저장됨 ${savedIds.size}개 <span id="savedToggleIcon" style="font-size:10px">${panelOpen ? '◀' : '▶'}</span>`;
 
   const list = document.getElementById('savedList');
   if (!savedList.length) {
