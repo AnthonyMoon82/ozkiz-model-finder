@@ -514,7 +514,7 @@ function renderCards(data) {
     const followers = p.followers != null ? fmtNum(p.followers) : '—';
 
     return `
-    <div class="card" onclick="openModal('${p.id}')">
+    <div class="card" data-post-id="${p.id}" onclick="openModal('${p.id}')">
       <div class="card-image" id="cimg-${p.id}">
         ${p.imgUrl && p._real
           ? `<img src="${p.imgUrl}" alt="" style="width:100%;height:100%;object-fit:cover" onerror="imgFail('${p.id}',${i})">`
@@ -601,7 +601,7 @@ function openModal(id) {
   document.getElementById('modalOverlay').classList.add('open');
 }
 function closeModal(e) { if (e.target === document.getElementById('modalOverlay')) closeModalDirect(); }
-function closeModalDirect() { document.getElementById('modalOverlay').classList.remove('open'); renderCards(allPosts); }
+function closeModalDirect() { document.getElementById('modalOverlay').classList.remove('open'); }
 
 // ── Supabase 설정 (팀원 공유 저장) ──────────────────────
 const SUPABASE_URL = 'https://qbrpjngmuxcybhnogkfr.supabase.co';
@@ -643,7 +643,9 @@ async function deleteModelFromDB(id) {
 
 async function toggleSave(id) {
   const p = allPosts.find(x => x.id === id);
-  if (savedIds.has(id)) {
+  const nowSaved = savedIds.has(id);
+
+  if (nowSaved) {
     savedIds.delete(id);
     await deleteModelFromDB(id);
     showToast('저장을 취소했어요');
@@ -653,9 +655,27 @@ async function toggleSave(id) {
     await saveModelToDB(p);
     showToast('💝 @' + p.username + ' 저장!');
   }
+
+  // 배지 카운트 업데이트
   document.getElementById('savedBadge').textContent = `💝 저장됨 ${savedIds.size}개`;
+
+  // ── 전체 재렌더링 없이 해당 카드 DOM만 부드럽게 업데이트 ──
+  const card = document.querySelector(`.card[data-post-id="${id}"]`);
+  if (card) {
+    const favBtn  = card.querySelector('.fav-btn');
+    const saveBtn = card.querySelector('.btn-save');
+    const isSaved = savedIds.has(id);
+    if (favBtn) {
+      favBtn.textContent = isSaved ? '❤️' : '🤍';
+      favBtn.classList.toggle('active', isSaved);
+    }
+    if (saveBtn) {
+      saveBtn.textContent = isSaved ? '💔 저장취소' : '💝 저장하기';
+    }
+  }
+
+  // 저장 패널 목록만 갱신 (cardsGrid는 건드리지 않음)
   await renderSaved();
-  renderCards(allPosts);
 }
 
 async function renderSaved() {
