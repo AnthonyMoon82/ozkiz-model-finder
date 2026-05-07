@@ -288,10 +288,11 @@ const APIFY_API   = 'https://api.apify.com/v2';
 const VERSION     = 'v10';   // 배포 버전 확인용
 
 let allPosts          = [];
-let currentViewBuffer = [];  // 현재 화면 배치 (팔로워 필터 적용 전 원본)
-let savedIds   = new Set();
-let panelOpen  = false;
-let currentTag = '';
+let currentViewBuffer = [];
+let savedIds          = new Set();   // 저장된 포스트 ID Set (빠른 조회용)
+let savedModels       = [];          // 저장된 포스트 전체 객체 배열 (로컬 캐시)
+let panelOpen         = false;
+let currentTag        = '';
 
 let tagBuffers    = {};   // 해시태그별 전체 버퍼 { '키즈모델': [...], '아동모델': [...] }
 let tagShownUsers = {};   // 해시태그별 이미 본 계정 { '키즈모델': Set(), '아동모델': Set() }
@@ -346,6 +347,12 @@ function removeHashtag(i) {
 // 재검색 시 아직 안 본 계정부터 우선 표시
 // (postBuffers, shownUserSets 는 tagBuffers/tagShown 으로 통합됨)
 
+// ── 배지 업데이트 (아이콘 유지) ───────────────────────
+function updateSavedBadge() {
+  document.getElementById('savedBadge').innerHTML =
+    `💝 저장됨 ${savedIds.size}개 <span id="savedToggleIcon" style="font-size:10px">${panelOpen ? '◀' : '▶'}</span>`;
+}
+
 // ── 초기화 ────────────────────────────────────────────
 async function init() {
   renderHashtagChips();
@@ -353,8 +360,11 @@ async function init() {
   setStatus('Apify 연결됨 ✓', true);
   showBanner('success', '✅ 연결 완료! 해시태그를 검색해보세요 🔍');
 
-  // Supabase에서 저장된 모델 불러오기 (팀원 공유)
-  await renderSaved();
+  // Supabase에서 딱 한 번만 불러와서 로컬 캐시에 저장
+  savedModels = await loadSavedFromDB();
+  savedIds    = new Set(savedModels.map(p => p.id));
+  updateSavedBadge();
+  renderSavedPanel();   // 로컬 캐시로 패널 렌더링
 }
 
 // ── 실시간 필터 적용 ─────────────────────────────────
@@ -646,49 +656,47 @@ async function toggleSave(id) {
   const nowSaved = savedIds.has(id);
 
   if (nowSaved) {
+    // ① 로컬 캐시에서 즉시 제거
     savedIds.delete(id);
-    await deleteModelFromDB(id);
+    savedModels = savedModels.filter(x => x.id !== id);
+    // ② 백그라운드로 DB 삭제 (await 없이 실행해 UI 블로킹 방지)
+    deleteModelFromDB(id);
     showToast('저장을 취소했어요');
   } else {
     if (!p) return;
+    // ① 로컬 캐시에 즉시 추가
     savedIds.add(id);
-    await saveModelToDB(p);
+    savedModels.push(p);
+    // ② 백그라운드로 DB 저장
+    saveModelToDB(p);
     showToast('💝 @' + p.username + ' 저장!');
   }
 
-  // 배지 카운트 업데이트
-  document.getElementById('savedBadge').innerHTML = `💝 저장됨 ${savedIds.size}개 <span id="savedToggleIcon" style="font-size:10px">${panelOpen ? '◀' : '▶'}</span>`;
+  // 배지 업데이트 (아이콘 포함)
+  updateSavedBadge();
 
-  // ── 전체 재렌더링 없이 해당 카드 DOM만 부드럽게 업데이트 ──
+  // 저장 패널: 로컬 캐시로만 렌더링 (DB 재조회 없음, cardsGrid 불변)
+  renderSavedPanel();
+
+  // 해당 카드 버튼만 DOM 업데이트 (전체 재렌더링 없음)
   const card = document.querySelector(`.card[data-post-id="${id}"]`);
   if (card) {
+    const isSaved = savedIds.has(id);
     const favBtn  = card.querySelector('.fav-btn');
     const saveBtn = card.querySelector('.btn-save');
-    const isSaved = savedIds.has(id);
-    if (favBtn) {
-      favBtn.textContent = isSaved ? '❤️' : '🤍';
-      favBtn.classList.toggle('active', isSaved);
-    }
-    if (saveBtn) {
-      saveBtn.textContent = isSaved ? '💔 저장취소' : '💝 저장하기';
-    }
+    if (favBtn) { favBtn.textContent = isSaved ? '❤️' : '🤍'; favBtn.classList.toggle('active', isSaved); }
+    if (saveBtn) { saveBtn.textContent = isSaved ? '💔 저장취소' : '💝 저장하기'; }
   }
-
-  // 저장 패널 목록만 갱신 (cardsGrid는 건드리지 않음)
-  await renderSaved();
 }
 
-async function renderSaved() {
-  const savedList = await loadSavedFromDB();
-  savedIds = new Set(savedList.map(p => p.id));
-  document.getElementById('savedBadge').innerHTML = `💝 저장됨 ${savedIds.size}개 <span id="savedToggleIcon" style="font-size:10px">${panelOpen ? '◀' : '▶'}</span>`;
-
+// ── 저장 패널 렌더링 (로컬 캐시 기반, DB 조회 없음) ──
+function renderSavedPanel() {
   const list = document.getElementById('savedList');
-  if (!savedList.length) {
+  if (!savedModels.length) {
     list.innerHTML = `<div style="text-align:center;padding:30px 0;font-size:13px;color:var(--text-muted)">🌸 저장한 모델이 없어요</div>`;
     return;
   }
-  list.innerHTML = savedList.map(p => `
+  list.innerHTML = savedModels.map(p => `
     <div class="saved-item"
       onclick="window.open('https://www.instagram.com/${p.username}/','_blank')"
       style="cursor:pointer" title="@${p.username} 인스타그램 열기">
