@@ -147,6 +147,36 @@
   #settingsOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 300; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
   #settingsOverlay.open { display: flex; }
 
+  /* 사이드바 탭 */
+  .sidebar-tabs { display: flex; border-bottom: 2px solid var(--border); margin: -24px -20px 20px; }
+  .sidebar-tab { flex: 1; padding: 14px 4px; font-size: 11px; font-weight: 700; cursor: pointer; border: none; background: transparent; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s; white-space: nowrap; }
+  .sidebar-tab.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--primary-light); }
+  .sidebar-tab:hover:not(.active) { background: var(--bg); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* 저장 모델 카드 (탭 뷰) */
+  .saved-cards-grid { display: flex; flex-direction: column; gap: 10px; }
+  .saved-card { background: white; border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); display: flex; gap: 0; transition: box-shadow 0.2s; }
+  .saved-card:hover { box-shadow: 0 6px 20px rgba(232,25,44,0.15); }
+  .saved-card-img { width: 80px; height: 80px; object-fit: cover; flex-shrink: 0; background: var(--primary-light); display: flex; align-items: center; justify-content: center; font-size: 28px; }
+  .saved-card-img img { width: 100%; height: 100%; object-fit: cover; }
+  .saved-card-body { padding: 10px 12px; flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
+  .saved-card-username { font-weight: 800; font-size: 14px; color: var(--text); }
+  .saved-card-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .saved-card-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+
+  /* 별점 */
+  .star-rating { display: flex; gap: 2px; }
+  .star { font-size: 18px; cursor: pointer; transition: transform 0.1s; color: #D1D5DB; line-height: 1; }
+  .star.filled { color: #F59E0B; }
+  .star:hover { transform: scale(1.25); }
+  .btn-unsave { padding: 4px 8px; background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); border-radius: 8px; font-size: 10px; font-weight: 600; cursor: pointer; }
+  .btn-unsave:hover { background: #FFF1F2; color: var(--primary); border-color: var(--primary); }
+
+  /* 탭 빈 화면 */
+  .tab-empty { text-align: center; padding: 40px 10px; color: var(--text-muted); font-size: 13px; }
+
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 </style>
@@ -159,13 +189,7 @@
     OzKiz 모델 파인더
   </div>
   <div class="header-right">
-    <div class="stat-badge" id="savedBadge"
-      onclick="toggleSavedPanel()"
-      style="cursor:pointer;display:flex;align-items:center;gap:6px;transition:background 0.2s"
-      onmouseover="this.style.background='rgba(255,255,255,0.35)'"
-      onmouseout="this.style.background='rgba(255,255,255,0.2)'">
-      💝 저장됨 0개 <span id="savedToggleIcon" style="font-size:10px">▶</span>
-    </div>
+    <div class="stat-badge" id="savedBadge">💝 저장됨 0개</div>
     <button class="header-btn" onclick="openSettings()">⚙️ 설정</button>
     <div class="api-status">
       <div class="dot" id="apiDot"></div>
@@ -175,42 +199,56 @@
 </header>
 
 <div class="container">
+  <!-- ── 왼쪽 사이드바 (3탭) ── -->
   <aside class="sidebar">
-    <div class="sidebar-section">
-      <div class="section-title">⚡ 해시태그 목록</div>
-      <div class="hashtag-chips" id="hashtagChips"></div>
-      <div style="display:flex;gap:6px;margin-top:10px">
-        <div style="position:relative;flex:1">
-          <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#9CA3AF;font-size:13px">＃</span>
-          <input id="newTagInput" type="text" placeholder="새 해시태그"
-            onkeydown="if(event.key==='Enter')addHashtag()"
-            style="width:100%;padding:7px 8px 7px 24px;border:2px solid #F3E0E0;border-radius:10px;font-size:13px;background:#FFF5F6;outline:none">
+    <div class="sidebar-tabs">
+      <button class="sidebar-tab active" id="tab-btn-search" onclick="switchTab('search')">🔍 검색</button>
+      <button class="sidebar-tab" id="tab-btn-pick"   onclick="switchTab('pick')">📥 1차 픽</button>
+      <button class="sidebar-tab" id="tab-btn-final"  onclick="switchTab('final')">⭐ 최종 누적</button>
+    </div>
+
+    <!-- 검색 탭 -->
+    <div id="tab-content-search" class="tab-content active">
+      <div class="sidebar-section">
+        <div class="section-title">⚡ 해시태그 목록</div>
+        <div class="hashtag-chips" id="hashtagChips"></div>
+        <div style="display:flex;gap:6px;margin-top:10px">
+          <div style="position:relative;flex:1">
+            <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#9CA3AF;font-size:13px">＃</span>
+            <input id="newTagInput" type="text" placeholder="새 해시태그"
+              onkeydown="if(event.key==='Enter')addHashtag()"
+              style="width:100%;padding:7px 8px 7px 24px;border:2px solid #F3E0E0;border-radius:10px;font-size:13px;background:#FFF5F6;outline:none">
+          </div>
+          <button onclick="addHashtag()"
+            style="padding:7px 12px;background:#E8192C;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0">+</button>
         </div>
-        <button onclick="addHashtag()"
-          style="padding:7px 12px;background:#E8192C;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0">
-          +
-        </button>
+        <div style="height:10px"></div>
+        <button class="search-btn" id="searchBtn" onclick="doSearch()">✨ 다음 검색 결과 보기</button>
       </div>
-      <div style="height:10px"></div>
-      <button class="search-btn" id="searchBtn" onclick="doSearch()">✨ 다음 검색 결과 보기</button>
-    </div>
-
-
-    <div class="sidebar-section">
-      <div class="section-title">📊 한 번에 볼 계정 수</div>
-      <div class="filter-row">
-        <div class="filter-label"><span>최대</span><span id="limitVal">20개</span></div>
-        <input type="range" id="limitSlider" min="5" max="50" step="5" value="20"
-          oninput="document.getElementById('limitVal').textContent=this.value+'개'; applyFilters()">
+      <div class="sidebar-section">
+        <div class="section-title">📊 한 번에 볼 계정 수</div>
+        <div class="filter-row">
+          <div class="filter-label"><span>최대</span><span id="limitVal">20개</span></div>
+          <input type="range" id="limitSlider" min="5" max="50" step="5" value="20"
+            oninput="document.getElementById('limitVal').textContent=this.value+'개'; applyFilters()">
+        </div>
       </div>
     </div>
 
-    <button class="search-btn" onclick="applyFilters()"
-      style="background:linear-gradient(135deg,#7C3AED,#5B21B6);box-shadow:0 3px 10px rgba(124,58,237,0.4)">
-      ✨ 필터 적용
-    </button>
+    <!-- 1차 픽 탭 -->
+    <div id="tab-content-pick" class="tab-content">
+      <div class="section-title" style="margin-bottom:12px">📥 1차 픽 <span id="pick-count" style="font-weight:400;color:var(--text-muted)"></span></div>
+      <div id="pick-list" class="saved-cards-grid"></div>
+    </div>
+
+    <!-- 최종 누적 탭 -->
+    <div id="tab-content-final" class="tab-content">
+      <div class="section-title" style="margin-bottom:12px">⭐ 최종 누적 <span id="final-count" style="font-weight:400;color:var(--text-muted)"></span></div>
+      <div id="final-list" class="saved-cards-grid"></div>
+    </div>
   </aside>
 
+  <!-- ── 메인 영역 ── -->
   <main class="main">
     <div id="infoBanner"></div>
     <div class="toolbar">
@@ -222,21 +260,13 @@
       </div>
     </div>
     <div id="cardsGrid" class="cards-grid">
-      <div class="empty" style="grid-column: 1/-1; text-align: center; padding: 100px 20px; color: var(--text-muted);">
-        <div style="font-size: 64px; margin-bottom: 20px;">📸</div>
-        <div style="font-size: 18px; font-weight: 700; color: var(--text);">발굴하고 싶은 모델의 해시태그를 선택해 주세요!</div>
-        <div style="font-size: 14px; margin-top: 8px;">왼쪽 목록에서 해시태그를 클릭하면 스캔이 시작됩니다.</div>
+      <div class="empty" style="grid-column:1/-1;text-align:center;padding:100px 20px;color:var(--text-muted);">
+        <div style="font-size:64px;margin-bottom:20px">📸</div>
+        <div style="font-size:18px;font-weight:700;color:var(--text)">발굴하고 싶은 모델의 해시태그를 선택해 주세요!</div>
+        <div style="font-size:14px;margin-top:8px">왼쪽 목록에서 해시태그를 클릭하면 스캔이 시작됩니다.</div>
       </div>
     </div>
   </main>
-
-  <aside class="saved-panel" id="savedPanel">
-    <div class="saved-inner">
-      <div id="savedList">
-        <div style="text-align:center;padding:30px 0;font-size:13px;color:var(--text-muted)">🌸 저장한 모델이 없어요</div>
-      </div>
-    </div>
-  </aside>
 </div>
 
 <!-- Settings Modal -->
@@ -347,10 +377,83 @@ function removeHashtag(i) {
 // 재검색 시 아직 안 본 계정부터 우선 표시
 // (postBuffers, shownUserSets 는 tagBuffers/tagShown 으로 통합됨)
 
-// ── 배지 업데이트 (아이콘 유지) ───────────────────────
+// ── 배지 업데이트 ─────────────────────────────────────
 function updateSavedBadge() {
-  document.getElementById('savedBadge').innerHTML =
-    `💝 저장됨 ${savedIds.size}개 <span id="savedToggleIcon" style="font-size:10px">${panelOpen ? '◀' : '▶'}</span>`;
+  document.getElementById('savedBadge').textContent = `💝 저장됨 ${savedIds.size}개`;
+}
+
+// ── 사이드바 탭 전환 ──────────────────────────────────
+const RATING_THRESHOLD = 3; // 이 이상이면 최종 누적
+
+function switchTab(tab) {
+  ['search','pick','final'].forEach(t => {
+    document.getElementById(`tab-btn-${t}`).classList.toggle('active', t === tab);
+    document.getElementById(`tab-content-${t}`).classList.toggle('active', t === tab);
+  });
+  if (tab === 'pick')  renderPickTab();
+  if (tab === 'final') renderFinalTab();
+}
+
+function renderPickTab() {
+  const picks = savedModels.filter(p => (p.rating || 0) < RATING_THRESHOLD);
+  document.getElementById('pick-count').textContent = `(${picks.length}명)`;
+  document.getElementById('pick-list').innerHTML = picks.length
+    ? picks.map(p => savedModelCard(p)).join('')
+    : `<div class="tab-empty">📭 1차 픽된 모델이 없어요<br>검색 탭에서 모델을 저장해 보세요</div>`;
+}
+
+function renderFinalTab() {
+  const finals = savedModels.filter(p => (p.rating || 0) >= RATING_THRESHOLD);
+  document.getElementById('final-count').textContent = `(${finals.length}명)`;
+  document.getElementById('final-list').innerHTML = finals.length
+    ? finals.map(p => savedModelCard(p)).join('')
+    : `<div class="tab-empty">⭐ 아직 최종 선발된 모델이 없어요<br>1차 픽 탭에서 별점 3개 이상을 주면 이동해요</div>`;
+}
+
+function savedModelCard(p) {
+  const rating = p.rating || 0;
+  const stars = [1,2,3,4,5].map(n =>
+    `<span class="star ${n <= rating ? 'filled' : ''}"
+      onclick="event.stopPropagation();updateRating('${p.id}',${n})"
+      title="${n}점">★</span>`
+  ).join('');
+  return `
+  <div class="saved-card">
+    <div class="saved-card-img">
+      ${p.imgUrl ? `<img src="${p.imgUrl}" alt="">` : '📷'}
+    </div>
+    <div class="saved-card-body">
+      <div>
+        <div class="saved-card-username">
+          <a href="https://www.instagram.com/${p.username}/" target="_blank"
+             onclick="event.stopPropagation()"
+             style="color:var(--text);text-decoration:none">@${p.username}</a>
+        </div>
+        <div class="saved-card-sub">${fmtNum(p.likes)}♥</div>
+      </div>
+      <div class="saved-card-actions">
+        <div class="star-rating">${stars}</div>
+        <button class="btn-unsave" onclick="event.stopPropagation();toggleSave('${p.id}')">✕ 삭제</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function updateRating(id, rating) {
+  // 로컬 캐시 즉시 업데이트
+  const model = savedModels.find(p => p.id === id);
+  if (!model) return;
+  model.rating = rating;
+
+  // Supabase 업데이트 (post_data 전체를 새 rating으로)
+  db.from('saved_models').update({ post_data: model }).eq('id', id)
+    .then(({ error }) => { if (error) console.error('별점 저장 실패:', error); });
+
+  // 현재 탭 다시 렌더링
+  const activeTab = document.querySelector('.sidebar-tab.active')?.id?.replace('tab-btn-','');
+  if (activeTab === 'pick')  renderPickTab();
+  if (activeTab === 'final') renderFinalTab();
+  showToast(`⭐ ${rating}점 저장됐어요!`);
 }
 
 // ── 초기화 ────────────────────────────────────────────
@@ -364,7 +467,9 @@ async function init() {
   savedModels = await loadSavedFromDB();
   savedIds    = new Set(savedModels.map(p => p.id));
   updateSavedBadge();
-  renderSavedPanel();   // 로컬 캐시로 패널 렌더링
+  // 각 탭 초기 렌더링 (사이드바)
+  renderPickTab();
+  renderFinalTab();
 }
 
 // ── 실시간 필터 적용 ─────────────────────────────────
@@ -672,13 +777,15 @@ async function toggleSave(id) {
     showToast('💝 @' + p.username + ' 저장!');
   }
 
-  // 배지 업데이트 (아이콘 포함)
+  // 배지 업데이트
   updateSavedBadge();
 
-  // 저장 패널: 로컬 캐시로만 렌더링 (DB 재조회 없음, cardsGrid 불변)
-  renderSavedPanel();
+  // 현재 활성 탭 갱신 (cardsGrid 불변)
+  const activeTab = document.querySelector('.sidebar-tab.active')?.id?.replace('tab-btn-','');
+  if (activeTab === 'pick')  renderPickTab();
+  if (activeTab === 'final') renderFinalTab();
 
-  // 해당 카드 버튼만 DOM 업데이트 (전체 재렌더링 없음)
+  // 검색 결과 카드의 버튼만 DOM 업데이트 (전체 재렌더링 없음)
   const card = document.querySelector(`.card[data-post-id="${id}"]`);
   if (card) {
     const isSaved = savedIds.has(id);
@@ -687,26 +794,6 @@ async function toggleSave(id) {
     if (favBtn) { favBtn.textContent = isSaved ? '❤️' : '🤍'; favBtn.classList.toggle('active', isSaved); }
     if (saveBtn) { saveBtn.textContent = isSaved ? '💔 저장취소' : '💝 저장하기'; }
   }
-}
-
-// ── 저장 패널 렌더링 (로컬 캐시 기반, DB 조회 없음) ──
-function renderSavedPanel() {
-  const list = document.getElementById('savedList');
-  if (!savedModels.length) {
-    list.innerHTML = `<div style="text-align:center;padding:30px 0;font-size:13px;color:var(--text-muted)">🌸 저장한 모델이 없어요</div>`;
-    return;
-  }
-  list.innerHTML = savedModels.map(p => `
-    <div class="saved-item"
-      onclick="window.open('https://www.instagram.com/${p.username}/','_blank')"
-      style="cursor:pointer" title="@${p.username} 인스타그램 열기">
-      <div class="saved-thumb">${p.imgUrl ? `<img src="${p.imgUrl}" alt="">` : '📷'}</div>
-      <div class="saved-info">
-        <div class="saved-name">@${p.username}</div>
-        <div class="saved-sub">${fmtNum(p.likes)}♥ · 📸 클릭하면 인스타 이동</div>
-      </div>
-      <button class="saved-remove" onclick="event.stopPropagation();toggleSave('${p.id}')">✕</button>
-    </div>`).join('');
 }
 
 // ── 정렬 & 필터 ───────────────────────────────────────
@@ -725,12 +812,7 @@ function selectChip(el, tag) {
   renderHashtagChips();      // 선택된 칩 활성화 표시
   doSearch();
 }
-function toggleSavedPanel() {
-  panelOpen = !panelOpen;
-  document.getElementById('savedPanel').classList.toggle('open', panelOpen);
-  const icon = document.getElementById('savedToggleIcon');
-  if (icon) icon.textContent = panelOpen ? '◀' : '▶';
-}
+// toggleSavedPanel 제거됨 — 사이드바 탭으로 대체
 
 // ── 로딩 ─────────────────────────────────────────────
 function showLoading(tag) {
