@@ -642,7 +642,9 @@ function savedModelCard(p) {
   return `
   <div class="saved-card">
     <div class="saved-card-img">
-      ${p.imgUrl ? `<img src="${p.imgUrl}" alt="">` : '📷'}
+      ${p.imgUrl
+        ? `<img src="${p.imgUrl}" alt="" style="width:100%;height:100%;object-fit:cover" onerror="imgFallback(this)">`
+        : `<div style="width:100%;height:100%">${IMG_FALLBACK_HTML}</div>`}
     </div>
     <div class="saved-card-body">
       <div>
@@ -850,8 +852,8 @@ function renderCards(data) {
     <div class="card" data-post-id="${p.id}" onclick="openModal('${p.id}')">
       <div class="card-image" id="cimg-${p.id}">
         ${p.imgUrl && p._real
-          ? `<img src="${p.imgUrl}" alt="" style="width:100%;height:100%;object-fit:cover" onerror="imgFail('${p.id}',${i})">`
-          : `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:60px">${getEmoji(i)}</div>`
+          ? `<img src="${p.imgUrl}" alt="" style="width:100%;height:100%;object-fit:cover" onerror="imgFallback(this)">`
+          : `<div style="width:100%;height:100%">${IMG_FALLBACK_HTML}</div>`
         }
         <div class="card-image-overlay"></div>
         <div class="card-badges">
@@ -897,11 +899,35 @@ function renderCards(data) {
   }).join('');
 }
 
-function imgFail(id, i) {
+// ── 이미지 만료/오류 공통 fallback (무한루프 방지 포함) ──
+const IMG_FALLBACK_HTML = `
+  <div style="width:100%;height:100%;background:#f3f4f6;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:6px;color:#9ca3af;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none"
+      stroke="#d1d5db" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+    </svg>
+    <span style="font-size:10px;font-family:inherit">이미지 만료</span>
+  </div>`.trim();
+
+function imgFallback(img) {
+  img.onerror = null;  // 무한루프 방지
+  const parent = img.parentElement;
+  if (parent) {
+    img.remove();
+    const el = document.createElement('div');
+    el.style.cssText = 'width:100%;height:100%;';
+    el.innerHTML = IMG_FALLBACK_HTML;
+    parent.insertAdjacentElement('afterbegin', el);
+  }
+}
+
+function imgFail(id) {
   const w = document.getElementById('cimg-' + id);
   if (w) {
     const img = w.querySelector('img');
-    if (img) img.outerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:60px">${getEmoji(i)}</div>`;
+    if (img) imgFallback(img);
   }
 }
 
@@ -913,8 +939,8 @@ function openModal(id) {
   document.getElementById('modalBody').innerHTML = `
     <div class="modal-img">
       ${p.imgUrl && p._real
-        ? `<img src="${p.imgUrl}" alt="" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;font-size:72px\\'>📷</div>'">`
-        : '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:72px">📷</div>'}
+        ? `<img src="${p.imgUrl}" alt="" style="width:100%;height:100%;object-fit:cover" onerror="imgFallback(this)">`
+        : `<div style="width:100%;height:100%">${IMG_FALLBACK_HTML}</div>`}
     </div>
     <div class="modal-stats">
       <div class="modal-stat"><div class="modal-stat-val">${fmtNum(p.likes)}</div><div class="modal-stat-key">좋아요</div></div>
