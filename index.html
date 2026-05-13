@@ -1214,6 +1214,25 @@ function showToast(msg) {
 
 // ── 시작 ─────────────────────────────────────────────
 init();
+
+// ── URL 파라미터로 탭 자동 전환 ───────────────────────
+// 예: ?tab=firstpick  →  1차 픽 탭
+//     ?tab=final      →  최종 누적 탭
+window.addEventListener('load', () => {
+  const tab = new URLSearchParams(window.location.search).get('tab');
+  if (!tab) return;
+
+  const key = tab.toLowerCase().replace(/\s+/g, '');
+
+  let targetTab = null;
+  if (key === 'firstpick' || key === '1차픽' || key === 'pick') {
+    targetTab = 'pick';
+  } else if (key === 'final' || key === '최종누적' || key === '최종') {
+    targetTab = 'final';
+  }
+
+  if (targetTab) switchTab(targetTab);
+});
 </script>
 </body>
 </html>
