@@ -642,8 +642,8 @@ function renderFinalTab() {
 
 // ── 아이 프로필 정보 추출 (캡션 + 프로필 소개글 통합 검색) ──
 function extractChildProfile(post) {
-  // caption 외에도 biography, ownerBiography 등 프로필 소개글까지 검색
-  const src = [
+  // caption + 모든 biography 필드를 하나로 합침
+  const raw = [
     post.caption,
     post.biography,
     post.ownerBiography,
@@ -653,57 +653,64 @@ function extractChildProfile(post) {
     post.owner?.bio,
   ].filter(Boolean).join(' ');
 
-  if (!src) return {};
+  if (!raw) return {};
+
+  // ① 특수기호를 공백으로 치환 → 파싱 단순화
+  //    괄호, 슬래시, 쉼표, 점(소수점 외), 물결, 특수문자 등을 모두 공백으로
+  const t = raw
+    .replace(/[()（）【】〔〕\[\]]/g, ' ')   // 괄호류
+    .replace(/[\/｜|\\]/g, ' ')               // 슬래시/파이프
+    .replace(/[,，、·・•※★☆]/g, ' ')         // 구분자
+    .replace(/[-~～]/g, ' ')                  // 줄표/물결
+    .replace(/\s+/g, ' ');                    // 연속 공백 정리
+
   const result = {};
 
-  // ── 키 (Height): 80~165cm, 소수점 허용 ───────────────
-  const heightRe = [
-    // "키 120", "키: 120.5", "신장 120"
-    /(?:키|신장)\s*[:：\-]?\s*(\d{2,3}(?:\.\d)?)\s*(?:cm|센치|센티|센치미터|센티미터)?(?!\d)/i,
-    // "120cm", "120 CM", "120.5cm", "120센치"
-    /(\d{2,3}(?:\.\d)?)\s*(?:cm|CM|Cm|센치|센티|센치미터|센티미터)(?!\d)/i,
-  ];
-  for (const re of heightRe) {
-    const m = src.match(re);
+  // ── 키 ─────────────────────────────────────────────
+  // 패턴 1: "키 XXX", "키XXX", "신장 XXX" (공백 0~다수, 단위 없어도 OK)
+  const h1 = t.match(/(?:키|신장)\s*(\d{2,3}(?:\.\d+)?)/);
+  // 패턴 2: XXX + cm/센티 (소수점 허용, 앞뒤 공백 무관)
+  const h2 = t.match(/(\d{2,3}(?:\.\d+)?)\s*(?:cm|CM|센티|센치|센치미터|센티미터)/);
+  for (const m of [h1, h2]) {
     if (m) {
       const v = parseFloat(m[1]);
       if (v >= 80 && v <= 165) { result.height = m[1] + 'cm'; break; }
     }
   }
 
-  // ── 몸무게 (Weight): 5~60kg, 소수점 허용 ────────────
-  const weightRe = [
-    // "몸무게 20", "체중: 20.5"
-    /(?:몸무게|체중)\s*[:：\-]?\s*(\d{1,2}(?:\.\d)?)\s*(?:kg|키로|킬로|킬로그램)?(?!\d)/i,
-    // "20kg", "20 kg", "20.5kg", "20키로"
-    /(\d{1,2}(?:\.\d)?)\s*(?:kg|KG|Kg|키로|킬로|킬로그램)(?!\d)/i,
-  ];
-  for (const re of weightRe) {
-    const m = src.match(re);
+  // ── 몸무게 ─────────────────────────────────────────
+  // 패턴 1: "몸무게 XX", "체중 XX"
+  const w1 = t.match(/(?:몸무게|체중)\s+(\d{1,2}(?:\.\d+)?)/);
+  // 패턴 2: XX + kg/키로 (소수점 허용)
+  const w2 = t.match(/(\d{1,2}(?:\.\d+)?)\s*(?:kg|KG|Kg|키로|킬로|킬로그램)/);
+  for (const m of [w1, w2]) {
     if (m) {
       const v = parseFloat(m[1]);
       if (v >= 5 && v <= 60) { result.weight = m[1] + 'kg'; break; }
     }
   }
 
-  // ── 나이/출생 ─────────────────────────────────────────
-  // 우선순위: 20XX년생 > XX년생 > 개월 > 만N세 > N세/살 > 20XX년(단독)
-  const birthRe = [
-    { re: /(20\d{2})\s*년\s*생/,             fmt: m => m[1].slice(2) + '년생' },
-    { re: /(20\d{2})년생/,                   fmt: m => m[1].slice(2) + '년생' },
+  // ── 나이 / 출생연도 ────────────────────────────────
+  // 우선순위: 4자리년생 > 2자리년생 > 개월 > 만N세 > N세/살 > 4자리년(단독)
+  const birthTests = [
+    // "2020년생", "2020 년 생", "19년생" (19XX도 처리)
+    { re: /((?:19|20)\d{2})\s*년\s*생/,      fmt: m => m[1].slice(2) + '년생' },
     { re: /(\d{2})\s*년\s*생/,               fmt: m => m[1] + '년생' },
-    { re: /(\d{2})년생/,                     fmt: m => m[1] + '년생' },
+    // "48개월", "24 개월"
     { re: /(\d{2,3})\s*개월/,               fmt: m => m[1] + '개월' },
+    // "만 8세", "만8살"
     { re: /만\s*(\d{1,2})\s*(?:세|살)/,     fmt: m => m[1] + '세' },
-    { re: /(\d{1,2})\s*(?:세|살)(?!\w)/,    fmt: m => {
+    // "8세", "8살" (1~18 범위)
+    { re: /(\d{1,2})\s*(?:세|살)/,           fmt: m => {
         const v = parseInt(m[1]);
         return (v >= 1 && v <= 18) ? v + '세' : null;
       }
     },
-    { re: /(20\d{2})\s*년(?!생|\d)/,         fmt: m => m[1].slice(2) + '년생' }, // "2016년" 단독
+    // "2016년", "2020년" 단독 (4자리)
+    { re: /((?:19|20)\d{2})\s*년/,           fmt: m => m[1].slice(2) + '년생' },
   ];
-  for (const { re, fmt } of birthRe) {
-    const m = src.match(re);
+  for (const { re, fmt } of birthTests) {
+    const m = t.match(re);
     if (m) { const r = fmt(m); if (r) { result.birth = r; break; } }
   }
 
