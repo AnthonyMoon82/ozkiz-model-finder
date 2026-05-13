@@ -640,60 +640,86 @@ function renderFinalTab() {
     : `<div class="tab-empty">⭐ 아직 최종 선발된 모델이 없어요<br>1차 픽 탭에서 별점 3개 이상을 주면 이동해요</div>`;
 }
 
-// ── 캡션에서 아이 프로필 정보 추출 ───────────────────
-function extractChildProfile(caption) {
-  if (!caption) return {};
+// ── 아이 프로필 정보 추출 (캡션 + 프로필 소개글 통합 검색) ──
+function extractChildProfile(post) {
+  // caption 외에도 biography, ownerBiography 등 프로필 소개글까지 검색
+  const src = [
+    post.caption,
+    post.biography,
+    post.ownerBiography,
+    post.profileBio,
+    post.bio,
+    post.owner?.biography,
+    post.owner?.bio,
+  ].filter(Boolean).join(' ');
+
+  if (!src) return {};
   const result = {};
 
-  // 키 (Height): 100~149cm 범위로 제한 (성인 제외)
+  // ── 키 (Height): 80~165cm, 소수점 허용 ───────────────
   const heightRe = [
-    /(?:키|신장)\s*[:：\-]?\s*(1[0-4]\d)\s*(?:cm|센치|센티|센치미터|센티미터)?/i,
-    /(1[0-4]\d)\s*(?:cm|CM|센치|센티|센치미터|센티미터)/i,
+    // "키 120", "키: 120.5", "신장 120"
+    /(?:키|신장)\s*[:：\-]?\s*(\d{2,3}(?:\.\d)?)\s*(?:cm|센치|센티|센치미터|센티미터)?(?!\d)/i,
+    // "120cm", "120 CM", "120.5cm", "120센치"
+    /(\d{2,3}(?:\.\d)?)\s*(?:cm|CM|Cm|센치|센티|센치미터|센티미터)(?!\d)/i,
   ];
   for (const re of heightRe) {
-    const m = caption.match(re);
-    if (m) { result.height = m[1] + 'cm'; break; }
+    const m = src.match(re);
+    if (m) {
+      const v = parseFloat(m[1]);
+      if (v >= 80 && v <= 165) { result.height = m[1] + 'cm'; break; }
+    }
   }
 
-  // 몸무게 (Weight): 10~49kg 범위
+  // ── 몸무게 (Weight): 5~60kg, 소수점 허용 ────────────
   const weightRe = [
-    /(?:몸무게|체중)\s*[:：\-]?\s*([1-4]\d(?:\.\d)?)\s*(?:kg|키로|킬로|킬로그램)?/i,
-    /([1-4]\d(?:\.\d)?)\s*(?:kg|KG|키로|킬로|킬로그램)/i,
+    // "몸무게 20", "체중: 20.5"
+    /(?:몸무게|체중)\s*[:：\-]?\s*(\d{1,2}(?:\.\d)?)\s*(?:kg|키로|킬로|킬로그램)?(?!\d)/i,
+    // "20kg", "20 kg", "20.5kg", "20키로"
+    /(\d{1,2}(?:\.\d)?)\s*(?:kg|KG|Kg|키로|킬로|킬로그램)(?!\d)/i,
   ];
   for (const re of weightRe) {
-    const m = caption.match(re);
-    if (m) { result.weight = m[1] + 'kg'; break; }
+    const m = src.match(re);
+    if (m) {
+      const v = parseFloat(m[1]);
+      if (v >= 5 && v <= 60) { result.weight = m[1] + 'kg'; break; }
+    }
   }
 
-  // 나이/출생연도
-  // 우선순위: 20XX년생 > XX년생 > 만N세 > N세/N살
+  // ── 나이/출생 ─────────────────────────────────────────
+  // 우선순위: 20XX년생 > XX년생 > 개월 > 만N세 > N세/살 > 20XX년(단독)
   const birthRe = [
-    { re: /(20\d{2})\s*년\s*생/,          fmt: m => m[1].slice(2) + '년생' },
-    { re: /(20\d{2})년생/,                fmt: m => m[1].slice(2) + '년생' },
-    { re: /(\d{2})\s*년\s*생/,            fmt: m => m[1] + '년생' },
-    { re: /(\d{2})년생/,                  fmt: m => m[1] + '년생' },
-    { re: /만\s*(\d{1,2})\s*(?:세|살)/,  fmt: m => m[1] + '세' },
-    { re: /(\d{1,2})\s*(?:세|살)/,        fmt: m => m[1] + '세' },
+    { re: /(20\d{2})\s*년\s*생/,             fmt: m => m[1].slice(2) + '년생' },
+    { re: /(20\d{2})년생/,                   fmt: m => m[1].slice(2) + '년생' },
+    { re: /(\d{2})\s*년\s*생/,               fmt: m => m[1] + '년생' },
+    { re: /(\d{2})년생/,                     fmt: m => m[1] + '년생' },
+    { re: /(\d{2,3})\s*개월/,               fmt: m => m[1] + '개월' },
+    { re: /만\s*(\d{1,2})\s*(?:세|살)/,     fmt: m => m[1] + '세' },
+    { re: /(\d{1,2})\s*(?:세|살)(?!\w)/,    fmt: m => {
+        const v = parseInt(m[1]);
+        return (v >= 1 && v <= 18) ? v + '세' : null;
+      }
+    },
+    { re: /(20\d{2})\s*년(?!생|\d)/,         fmt: m => m[1].slice(2) + '년생' }, // "2016년" 단독
   ];
   for (const { re, fmt } of birthRe) {
-    const m = caption.match(re);
-    if (m) { result.birth = fmt(m); break; }
+    const m = src.match(re);
+    if (m) { const r = fmt(m); if (r) { result.birth = r; break; } }
   }
 
   return result;
 }
 
-function profileBadgesHTML(caption) {
-  const info = extractChildProfile(caption);
+function profileBadgeSpans(post) {
+  const info  = extractChildProfile(post);
   const items = [info.height, info.weight, info.birth].filter(Boolean);
-  if (!items.length) return '';
-  return `<div class="profile-badges">${items.map(v => `<span class="profile-badge">${v}</span>`).join('')}</div>`;
+  return items.map(v => `<span class="profile-badge">${v}</span>`).join('');
 }
 
 function savedModelCard(p) {
-  const rating  = p.rating || 0;
-  const badges  = profileBadgesHTML(p.caption);
-  const stars   = [1,2,3,4,5].map(n =>
+  const rating     = p.rating || 0;
+  const badgeSpans = profileBadgeSpans(p);   // 배지 span들 (래퍼 없음)
+  const stars      = [1,2,3,4,5].map(n =>
     `<span class="star ${n <= rating ? 'filled' : ''}"
       onclick="event.stopPropagation();updateRating('${p.id}', ${n} === ${rating} ? 0 : ${n})"
       title="${n === rating ? '별점 초기화' : n+'점'}">★</span>`
@@ -707,12 +733,15 @@ function savedModelCard(p) {
     </div>
     <div class="saved-card-body">
       <div>
-        <div class="saved-card-username">
-          <a href="https://www.instagram.com/${p.username}/" target="_blank"
-             onclick="event.stopPropagation()">@${p.username}</a>
+        <!-- 아이디 + 배지 가로 정렬 -->
+        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+          <div class="saved-card-username">
+            <a href="https://www.instagram.com/${p.username}/" target="_blank"
+               onclick="event.stopPropagation()">@${p.username}</a>
+          </div>
+          ${badgeSpans}
         </div>
         <div class="saved-card-sub">${fmtNum(p.likes)}♥</div>
-        ${badges}
       </div>
       <div class="saved-card-actions">
         <div class="star-rating">${stars}</div>
