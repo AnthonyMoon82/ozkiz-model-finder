@@ -291,6 +291,15 @@
   .saved-card-username a { color: inherit; text-decoration: none; }
   .saved-card-username a:hover { color: var(--red); }
   .saved-card-sub { font-size: 11px; color: var(--gray-400); margin-top: 1px; }
+  /* 아이 프로필 배지 */
+  .profile-badges { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+  .profile-badge {
+    display: inline-flex; align-items: center;
+    padding: 1px 6px; border-radius: 4px;
+    font-size: 10px; font-weight: 600;
+    background: #fdf2f8; color: #9d174d;
+    border: 1px solid #fce7f3; white-space: nowrap;
+  }
   .saved-card-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
 
   /* 별점 */
@@ -631,10 +640,60 @@ function renderFinalTab() {
     : `<div class="tab-empty">⭐ 아직 최종 선발된 모델이 없어요<br>1차 픽 탭에서 별점 3개 이상을 주면 이동해요</div>`;
 }
 
+// ── 캡션에서 아이 프로필 정보 추출 ───────────────────
+function extractChildProfile(caption) {
+  if (!caption) return {};
+  const result = {};
+
+  // 키 (Height): 100~149cm 범위로 제한 (성인 제외)
+  const heightRe = [
+    /(?:키|신장)\s*[:：\-]?\s*(1[0-4]\d)\s*(?:cm|센치|센티|센치미터|센티미터)?/i,
+    /(1[0-4]\d)\s*(?:cm|CM|센치|센티|센치미터|센티미터)/i,
+  ];
+  for (const re of heightRe) {
+    const m = caption.match(re);
+    if (m) { result.height = m[1] + 'cm'; break; }
+  }
+
+  // 몸무게 (Weight): 10~49kg 범위
+  const weightRe = [
+    /(?:몸무게|체중)\s*[:：\-]?\s*([1-4]\d(?:\.\d)?)\s*(?:kg|키로|킬로|킬로그램)?/i,
+    /([1-4]\d(?:\.\d)?)\s*(?:kg|KG|키로|킬로|킬로그램)/i,
+  ];
+  for (const re of weightRe) {
+    const m = caption.match(re);
+    if (m) { result.weight = m[1] + 'kg'; break; }
+  }
+
+  // 나이/출생연도
+  // 우선순위: 20XX년생 > XX년생 > 만N세 > N세/N살
+  const birthRe = [
+    { re: /(20\d{2})\s*년\s*생/,          fmt: m => m[1].slice(2) + '년생' },
+    { re: /(20\d{2})년생/,                fmt: m => m[1].slice(2) + '년생' },
+    { re: /(\d{2})\s*년\s*생/,            fmt: m => m[1] + '년생' },
+    { re: /(\d{2})년생/,                  fmt: m => m[1] + '년생' },
+    { re: /만\s*(\d{1,2})\s*(?:세|살)/,  fmt: m => m[1] + '세' },
+    { re: /(\d{1,2})\s*(?:세|살)/,        fmt: m => m[1] + '세' },
+  ];
+  for (const { re, fmt } of birthRe) {
+    const m = caption.match(re);
+    if (m) { result.birth = fmt(m); break; }
+  }
+
+  return result;
+}
+
+function profileBadgesHTML(caption) {
+  const info = extractChildProfile(caption);
+  const items = [info.height, info.weight, info.birth].filter(Boolean);
+  if (!items.length) return '';
+  return `<div class="profile-badges">${items.map(v => `<span class="profile-badge">${v}</span>`).join('')}</div>`;
+}
+
 function savedModelCard(p) {
-  const rating = p.rating || 0;
-  // 이미 색칠된 별을 다시 클릭하면 0으로 토글
-  const stars = [1,2,3,4,5].map(n =>
+  const rating  = p.rating || 0;
+  const badges  = profileBadgesHTML(p.caption);
+  const stars   = [1,2,3,4,5].map(n =>
     `<span class="star ${n <= rating ? 'filled' : ''}"
       onclick="event.stopPropagation();updateRating('${p.id}', ${n} === ${rating} ? 0 : ${n})"
       title="${n === rating ? '별점 초기화' : n+'점'}">★</span>`
@@ -653,6 +712,7 @@ function savedModelCard(p) {
              onclick="event.stopPropagation()">@${p.username}</a>
         </div>
         <div class="saved-card-sub">${fmtNum(p.likes)}♥</div>
+        ${badges}
       </div>
       <div class="saved-card-actions">
         <div class="star-rating">${stars}</div>
