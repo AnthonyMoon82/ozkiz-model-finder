@@ -655,10 +655,10 @@ function getVoterCount(p) {
 // ── 최종 누적 분류 조건 ──────────────────────────────────
 // 조건 1: 평균 점수 >= RATING_THRESHOLD (현재 3점)
 // 조건 2: 투표 완료자 >= MIN_VOTERS (현재 2명 — 3명으로 바꾸려면 아래 값을 3으로 수정)
-const MIN_VOTERS = 2; // ← 최소 투표 완료자 수. 전원 투표 필요 시 3으로 변경
+const MIN_VOTERS = REVIEWERS.length; // 전원(3명) 투표 필수. 2명으로 낮추려면 2로 변경
 
 function isReadyForFinal(p) {
-  return getVoterCount(p) >= MIN_VOTERS && getAverageRating(p) >= RATING_THRESHOLD;
+  return getVoterCount(p) === MIN_VOTERS && getAverageRating(p) >= RATING_THRESHOLD;
 }
 
 function updateTabBadges() {
