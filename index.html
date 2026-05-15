@@ -761,15 +761,28 @@ function savedModelCard(p) {
 async function updateRating(id, rating) {
   const model = savedModels.find(p => p.id === id);
   if (!model) return;
+
+  // ① 낙관적 UI 업데이트 — DB 통신 전에 즉시 화면 반영
   model.rating = rating;
-
-  db.from('saved_models').update({ post_data: model }).eq('id', id)
-    .then(({ error }) => { if (error) console.error('별점 저장 실패:', error); });
-
-  // 현재 활성 탭 재렌더
   if (currentSidebarTab === 'pick')  renderPickTab();
   if (currentSidebarTab === 'final') renderFinalTab();
-  showToast(rating === 0 ? '별점을 초기화했어요' : `⭐ ${rating}점 저장됐어요!`);
+
+  // ② DB에 rating 컬럼 + post_data 동시 저장 (await로 성공 여부 확인)
+  try {
+    const { error } = await db
+      .from('saved_models')
+      .update({
+        rating:    rating,         // 별도 rating 컬럼 (신뢰도 높음)
+        post_data: { ...model }   // post_data 안에도 rating 포함해서 저장
+      })
+      .eq('id', id);
+
+    if (error) throw error;
+    showToast(rating === 0 ? '별점을 초기화했어요' : `⭐ ${rating}점 저장됐어요!`);
+  } catch(e) {
+    console.error('별점 저장 실패:', e);
+    showToast('⚠️ 별점 저장에 실패했어요. 다시 시도해 주세요.');
+  }
 }
 
 // ── 초기화 ────────────────────────────────────────────
@@ -1071,7 +1084,15 @@ async function loadSavedFromDB() {
       .select('*')
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return (data || []).map(row => row.post_data);
+    return (data || []).map(row => {
+      const post = row.post_data || {};
+      // rating 컬럼이 있으면 post_data.rating보다 우선 적용
+      // (updateRating이 rating 컬럼에도 저장하므로 더 신뢰도 높음)
+      if (row.rating !== null && row.rating !== undefined) {
+        post.rating = row.rating;
+      }
+      return post;
+    });
   } catch(e) {
     console.error('저장 목록 로드 실패:', e);
     return [];
