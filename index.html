@@ -771,10 +771,7 @@ async function updateRating(id, rating) {
   try {
     const { error } = await db
       .from('saved_models')
-      .update({
-        rating:    rating,         // 별도 rating 컬럼 (신뢰도 높음)
-        post_data: { ...model }   // post_data 안에도 rating 포함해서 저장
-      })
+      .update({ post_data: { ...model } })  // post_data 하나만 업데이트
       .eq('id', id);
 
     if (error) throw error;
@@ -1084,15 +1081,8 @@ async function loadSavedFromDB() {
       .select('*')
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return (data || []).map(row => {
-      const post = row.post_data || {};
-      // rating 컬럼이 있으면 post_data.rating보다 우선 적용
-      // (updateRating이 rating 컬럼에도 저장하므로 더 신뢰도 높음)
-      if (row.rating !== null && row.rating !== undefined) {
-        post.rating = row.rating;
-      }
-      return post;
-    });
+    // rating은 post_data 안에 저장됨 (별도 컬럼 없음)
+    return (data || []).map(row => row.post_data || {});
   } catch(e) {
     console.error('저장 목록 로드 실패:', e);
     return [];
