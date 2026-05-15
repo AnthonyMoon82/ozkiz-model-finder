@@ -646,9 +646,24 @@ function getAverageRating(p) {
   return scores.reduce((a, b) => a + b, 0) / scores.length;
 }
 
+// 투표한 사람 수 (0점 제외)
+function getVoterCount(p) {
+  const r = getRatings(p);
+  return REVIEWERS.filter(k => (r[k] || 0) > 0).length;
+}
+
+// ── 최종 누적 분류 조건 ──────────────────────────────────
+// 조건 1: 평균 점수 >= RATING_THRESHOLD (현재 3점)
+// 조건 2: 투표 완료자 >= MIN_VOTERS (현재 2명 — 3명으로 바꾸려면 아래 값을 3으로 수정)
+const MIN_VOTERS = 2; // ← 최소 투표 완료자 수. 전원 투표 필요 시 3으로 변경
+
+function isReadyForFinal(p) {
+  return getVoterCount(p) >= MIN_VOTERS && getAverageRating(p) >= RATING_THRESHOLD;
+}
+
 function updateTabBadges() {
-  const picks  = savedModels.filter(p => getAverageRating(p) < RATING_THRESHOLD).length;
-  const finals = savedModels.filter(p => getAverageRating(p) >= RATING_THRESHOLD).length;
+  const picks  = savedModels.filter(p => !isReadyForFinal(p)).length;
+  const finals = savedModels.filter(p =>  isReadyForFinal(p)).length;
   const pb = document.getElementById('pick-badge');
   const fb = document.getElementById('final-badge');
   if (pb) pb.textContent = picks;
@@ -656,7 +671,8 @@ function updateTabBadges() {
 }
 
 function renderPickTab() {
-  const picks = savedModels.filter(p => getAverageRating(p) < RATING_THRESHOLD);
+  // 최종 조건 미충족(투표 부족 OR 평균 미달) → 1차 픽에 유지
+  const picks = savedModels.filter(p => !isReadyForFinal(p));
   updateTabBadges();
   document.getElementById('pick-list').innerHTML = picks.length
     ? picks.map(p => savedModelCard(p)).join('')
@@ -664,11 +680,12 @@ function renderPickTab() {
 }
 
 function renderFinalTab() {
-  const finals = savedModels.filter(p => getAverageRating(p) >= RATING_THRESHOLD);
+  // 최종 조건 충족(투표 >= MIN_VOTERS AND 평균 >= 3) → 최종 누적
+  const finals = savedModels.filter(p => isReadyForFinal(p));
   updateTabBadges();
   document.getElementById('final-list').innerHTML = finals.length
     ? finals.map(p => savedModelCard(p)).join('')
-    : `<div class="tab-empty">⭐ 아직 최종 선발된 모델이 없어요<br>평균 별점 3점 이상이면 자동으로 이동해요</div>`;
+    : `<div class="tab-empty">⭐ 아직 최종 선발된 모델이 없어요<br>${MIN_VOTERS}명 이상 투표 + 평균 3점 이상이면 이동해요</div>`;
 }
 
 // ── 아이 프로필 정보 추출 (캡션 + 프로필 소개글 통합 검색) ──
