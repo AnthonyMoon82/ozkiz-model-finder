@@ -542,20 +542,23 @@
           <div id="final-list" class="saved-cards-list" style="display:none"></div>
         </div>
 
-        <!-- 기존 모델 DB 탭 -->
+        <!-- 기존 모델 DB 탭 (Notion API 동기화) -->
         <div id="dbGrid" style="display:none">
-          <input type="file" id="csvFileInput" accept=".csv" style="display:none" onchange="handleCSVFile(this.files[0])">
-          <div class="db-drop-zone" id="dbDropZone"
-            onclick="document.getElementById('csvFileInput').click()"
-            ondragover="event.preventDefault();this.classList.add('drag-over')"
-            ondragleave="this.classList.remove('drag-over')"
-            ondrop="event.preventDefault();this.classList.remove('drag-over');handleCSVFile(event.dataTransfer.files[0])">
-            <div class="dz-icon">📂</div>
-            <div class="dz-title">노션 CSV 파일을 여기에 드래그하거나 클릭해서 업로드</div>
-            <div class="dz-sub">노션에서 내보낸 .csv 파일을 불러와 DB에 저장해요</div>
+          <!-- 동기화 컨트롤 -->
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+            <button onclick="syncNotion()" id="syncNotionBtn"
+              style="padding:10px 22px;background:var(--red);color:white;border:none;border-radius:var(--r-md);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:opacity .15s">
+              🔄 노션 동기화
+            </button>
+            <button onclick="deleteAllNotionData()"
+              style="padding:10px 16px;background:transparent;color:#dc2626;border:2px solid #fca5a5;border-radius:var(--r-md);font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s"
+              onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='transparent'">
+              🚨 잘못 올라간 노션 데이터 전체 삭제
+            </button>
+            <div id="syncResult" style="font-size:12px;color:var(--gray-500)"></div>
           </div>
-          <div id="importProgress"></div>
-          <div id="dbTableWrap"></div>
+          <!-- 동기화된 노션 모델 목록 -->
+          <div id="notionModelsList"></div>
         </div>
       </div>
     </div>
@@ -706,6 +709,7 @@ function switchTab(tab) {
 
   if (tab === 'pick')  renderPickTab();
   if (tab === 'final') renderFinalTab();
+  if (tab === 'db')    renderNotionDBTab();
 }
 
 // 현재 활성 저장 탭 재렌더 (프로젝트 필터 변경 시 호출)
@@ -766,8 +770,13 @@ function applyProjectFilter(list) {
   return list.filter(p => (p.project || '') === pf);
 }
 
+// 노션 데이터 판별: source, _source, id prefix 세 가지로 확인
+const isNotionData = p =>
+  p.source === 'notion' || p._source === 'notion' || (p.id && p.id.startsWith('notion_'));
+
 function renderPickTab() {
-  let picks = savedModels.filter(p => !isReadyForFinal(p));
+  // 노션 데이터 완전 제외
+  let picks = savedModels.filter(p => !isReadyForFinal(p) && !isNotionData(p));
   picks = applyProjectFilter(picks);
   updateTabBadges();
   document.getElementById('pick-list').innerHTML = picks.length
@@ -776,12 +785,49 @@ function renderPickTab() {
 }
 
 function renderFinalTab() {
-  let finals = savedModels.filter(p => isReadyForFinal(p));
+  // 노션 데이터 완전 제외
+  let finals = savedModels.filter(p => isReadyForFinal(p) && !isNotionData(p));
   finals = applyProjectFilter(finals);
   updateTabBadges();
   document.getElementById('final-list').innerHTML = finals.length
     ? finals.map(p => savedModelCard(p)).join('')
     : `<div class="tab-empty">⭐ 아직 최종 선발된 모델이 없어요<br>${MIN_VOTERS}명 이상 투표 + 평균 3점 이상이면 이동해요</div>`;
+}
+
+// 기존 모델 DB 탭 — 노션 데이터만 렌더링
+function renderNotionDBTab() {
+  const list = savedModels.filter(isNotionData);
+  const el = document.getElementById('notionModelsList');
+  if (!el) return;
+  if (!list.length) {
+    el.innerHTML = `<div class="tab-empty">🗂️ 동기화된 노션 모델이 없어요<br>위 버튼을 눌러 노션 DB를 동기화해 주세요</div>`;
+    return;
+  }
+  el.innerHTML = list.map(p => {
+    const sp = extractChildProfile(p);
+    const badges = [sp.height, sp.weight, sp.birth].filter(Boolean)
+      .map(v => `<span class="profile-badge">${v}</span>`).join('');
+    const igLink = p.username && p.username !== '알수없음'
+      ? `<a href="https://www.instagram.com/${p.username}/" target="_blank"
+           style="font-size:11px;color:var(--red);text-decoration:none">@${p.username}</a>`
+      : `<span style="font-size:11px;color:var(--gray-400)">인스타 없음</span>`;
+    // caption에서 URL·노션 링크 제거
+    const cleanNote = (p.caption || '').replace(/https?:\/\/\S+/g,'').replace(/Related to\s+\S+/g,'').trim();
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:white;border:1px solid var(--gray-200);border-radius:10px;margin-bottom:6px">
+      <div style="width:36px;height:36px;border-radius:8px;background:var(--gray-100);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px">
+        ${p.imgUrl ? `<img src="${p.imgUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="imgFallback(this)">` : '👤'}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:13px">${p.fullName || p.username}</div>
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:2px">${igLink}${badges}</div>
+        ${cleanNote ? `<div style="font-size:11px;color:var(--gray-500);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cleanNote}</div>` : ''}
+      </div>
+      <button onclick="deleteSingleNotionModel('${p.id}')"
+        style="width:26px;height:26px;border:none;background:transparent;cursor:pointer;font-size:14px;color:var(--gray-400);flex-shrink:0"
+        title="삭제">🗑️</button>
+    </div>`;
+  }).join('');
 }
 
 // ── 아이 프로필 정보 추출 (캡션 + 프로필 소개글 통합 검색) ──
@@ -999,102 +1045,88 @@ async function updateMemo(id, memo) {
   } catch(e) { console.error('메모 저장 실패:', e); }
 }
 
-// ── 노션 CSV 파싱 및 Supabase Import ─────────────────
-function parseCSVLine(line) {
-  const result = []; let cur = ''; let inQuote = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') { inQuote = !inQuote; }
-    else if (ch === ',' && !inQuote) { result.push(cur.trim()); cur = ''; }
-    else { cur += ch; }
-  }
-  result.push(cur.trim());
-  return result;
-}
+// ── 노션 데이터 일괄 삭제 ─────────────────────────────
+async function deleteAllNotionData() {
+  const notionItems = savedModels.filter(isNotionData);
+  if (!notionItems.length) { showToast('삭제할 노션 데이터가 없어요'); return; }
+  if (!confirm(`⚠️ Supabase에 저장된 노션 데이터 ${notionItems.length}개를 전부 삭제할까요?\n이 작업은 되돌릴 수 없어요.`)) return;
 
-function parseCSV(text) {
-  const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l => l.trim());
-  if (lines.length < 2) return [];
-  const headers = parseCSVLine(lines[0]).map(h => h.replace(/"/g,'').trim());
-  return lines.slice(1).map(line => {
-    const vals = parseCSVLine(line);
-    const obj = {};
-    headers.forEach((h, i) => { obj[h] = (vals[i] || '').replace(/"/g,'').trim(); });
-    return obj;
-  }).filter(row => Object.values(row).some(v => v));
-}
-
-// 노션 컬럼명 → post_data 필드 매핑
-function mapRowToPostData(row) {
-  const get = (...keys) => keys.map(k => row[k] || row[k.toLowerCase()] || '').find(v => v) || '';
-
-  const username = get('인스타ID','인스타그램','Instagram','@ID','username','인스타')
-                   .replace(/^@/,'').trim();
-  const fullName = get('이름','Name','name','모델명');
-  const height   = get('키','Height','height','신장');
-  const weight   = get('몸무게','Weight','weight','체중');
-  const age      = get('나이','출생','Age','생년','년생');
-  const note     = get('특징','Notes','메모','비고','특이사항','Memo');
-  const category = get('카테고리','Category','분류');
-
-  const bioArr = [height&&`키 ${height}`, weight&&`몸무게 ${weight}`, age&&`${age}`].filter(Boolean);
-
-  return {
-    id:        'notion_' + Date.now() + '_' + Math.random().toString(36).substr(2,5),
-    username:  username || fullName.replace(/\s/g,'') || '알수없음',
-    fullName,
-    biography: bioArr.join(' / '),
-    caption:   [note, category].filter(Boolean).join(' | '),
-    imgUrl:    '',
-    permalink: username ? `https://www.instagram.com/${username}/` : '',
-    likes:     0, comments: 0, followers: null,
-    timestamp: '', type: 'Notion', _real: false,
-    ratings:   { nicole: 0, rachel: 0, stella: 0 },
-    _source:   'notion'
-  };
-}
-
-async function handleCSVFile(file) {
-  if (!file || !file.name.endsWith('.csv')) { showToast('⚠️ CSV 파일만 업로드할 수 있어요'); return; }
-  const progress = document.getElementById('importProgress');
-  progress.innerHTML = `<div class="import-progress">📂 파일 읽는 중...</div>`;
-
-  const text = await file.text();
-  const rows = parseCSV(text);
-  if (!rows.length) { progress.innerHTML = `<div class="import-progress">⚠️ 데이터를 읽지 못했어요</div>`; return; }
-
-  progress.innerHTML = `<div class="import-progress">⏳ ${rows.length}개 데이터 Supabase에 저장 중...</div>`;
-
-  let success = 0, skip = 0;
-  for (const row of rows) {
-    const postData = mapRowToPostData(row);
-    if (savedIds.has(postData.id) || postData.username === '알수없음') { skip++; continue; }
-    try {
-      const { error } = await db.from('saved_models').insert({ id: postData.id, post_data: postData });
-      if (!error) {
-        savedModels.push(postData);
-        savedIds.add(postData.id);
-        success++;
-      }
-    } catch(e) { skip++; }
+  const ids = notionItems.map(p => p.id);
+  // 100개씩 나눠서 DELETE
+  const CHUNK = 100;
+  let deleted = 0;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const { error } = await db.from('saved_models').delete().in('id', ids.slice(i, i + CHUNK));
+    if (!error) deleted += Math.min(CHUNK, ids.length - i);
   }
 
-  updateSavedBadge();
-  renderPickTab();
-  renderFinalTab();
+  // 로컬 캐시 업데이트
+  savedModels = savedModels.filter(p => !isNotionData(p));
+  savedIds    = new Set(savedModels.map(p => p.id));
+  updateSavedBadge(); updateTabBadges();
+  renderNotionDBTab();
+  showToast(`🗑️ 노션 데이터 ${deleted}개 삭제 완료`);
+}
 
-  // 미리보기 테이블
-  const cols = Object.keys(rows[0]).slice(0, 6);
-  const tableHTML = `
-    <div class="db-table-wrap">
-      <table class="db-table">
-        <thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
-        <tbody>${rows.slice(0,20).map(r=>`<tr>${cols.map(c=>`<td>${r[c]||''}</td>`).join('')}</tr>`).join('')}</tbody>
-      </table>
-    </div>`;
-  progress.innerHTML = `<div class="import-progress" style="color:#10b981;font-weight:700">
-    ✅ ${success}개 저장 완료 (중복/오류 ${skip}개 제외) — 총 ${rows.length}개 행</div>` + tableHTML;
-  showToast(`✅ 노션 데이터 ${success}개 가져왔어요!`);
+// 노션 모델 개별 삭제
+async function deleteSingleNotionModel(id) {
+  const { error } = await db.from('saved_models').delete().eq('id', id);
+  if (error) { showToast('삭제 실패'); return; }
+  savedModels = savedModels.filter(p => p.id !== id);
+  savedIds.delete(id);
+  updateSavedBadge(); updateTabBadges();
+  renderNotionDBTab();
+  showToast('삭제됐어요');
+}
+
+// ── Notion API 동기화 ─────────────────────────────────
+async function syncNotion() {
+  const btn     = document.getElementById('syncNotionBtn');
+  const result  = document.getElementById('syncResult');
+
+  btn.disabled    = true;
+  btn.textContent = '⏳ 동기화 중...';
+  result.innerHTML = `<div class="import-progress">🔗 Notion DB에서 데이터를 가져오는 중입니다...</div>`;
+
+  try {
+    const res  = await fetch('/api/sync-notion', { method: 'POST' });
+    const data = await res.json();
+
+    if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+
+    // 동기화 성공 → 로컬 캐시 갱신
+    savedModels = await loadSavedFromDB();
+    savedIds    = new Set(savedModels.map(p => p.id));
+    updateSavedBadge();
+    updateTabBadges();
+    renderPickTab();
+    renderFinalTab();
+    renderNotionDBTab();
+
+    result.innerHTML = `
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--r-md);padding:16px;text-align:center">
+        <div style="font-size:28px;margin-bottom:8px">✅</div>
+        <div style="font-weight:800;color:#166534;font-size:15px">${data.message}</div>
+        <div style="color:#4ade80;font-size:12px;margin-top:4px">총 ${data.total}개 조회 · ${data.upserted}개 저장</div>
+      </div>`;
+    showToast(`✅ 노션 동기화 완료! ${data.upserted}개 저장`);
+
+  } catch(e) {
+    console.error('노션 동기화 실패:', e);
+    result.innerHTML = `
+      <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:var(--r-md);padding:16px;text-align:center">
+        <div style="font-size:24px;margin-bottom:6px">⚠️</div>
+        <div style="font-weight:700;color:#9f1239;font-size:13px">동기화 실패</div>
+        <div style="color:#fb7185;font-size:12px;margin-top:4px">${e.message}</div>
+        <div style="color:var(--gray-400);font-size:11px;margin-top:6px">
+          Vercel 환경변수(NOTION_TOKEN, NOTION_DB_ID)를 확인해 주세요
+        </div>
+      </div>`;
+    showToast('⚠️ 노션 동기화에 실패했어요');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '🔄 노션 동기화 시작';
+  }
 }
 
 // ── 초기화 ────────────────────────────────────────────
@@ -1150,7 +1182,7 @@ function normalizePost(p, i) {
     id: p.id || shortCode || ('post_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2, 5)),
     username, fullName, followers, likes, comments,
     imgUrl, permalink, caption, timestamp, biography,
-    type: mediaType, _real: true
+    type: mediaType, _real: true, source: 'instagram'
   };
 }
 
