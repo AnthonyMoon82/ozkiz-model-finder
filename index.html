@@ -377,6 +377,50 @@
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--gray-900); color: white; padding: 10px 20px; border-radius: 10px; font-size: 13px; font-weight: 600; box-shadow: var(--shadow-md); transition: transform .3s; z-index: 400; white-space: nowrap; }
   .toast.show { transform: translateX(-50%) translateY(0); }
 
+  /* ── DB 탭 ───────────────────────────────────────── */
+  .db-drop-zone {
+    border: 2px dashed var(--gray-300); border-radius: var(--r-lg);
+    padding: 28px 20px; text-align: center; cursor: pointer;
+    transition: border-color .2s, background .2s;
+    background: var(--gray-50); margin-bottom: 16px;
+  }
+  .db-drop-zone:hover, .db-drop-zone.drag-over { border-color: var(--red); background: var(--red-50); }
+  .db-drop-zone .dz-icon { font-size: 36px; margin-bottom: 8px; }
+  .db-drop-zone .dz-title { font-size: 14px; font-weight: 700; color: var(--gray-700); margin-bottom: 4px; }
+  .db-drop-zone .dz-sub { font-size: 12px; color: var(--gray-400); }
+  .import-progress { font-size: 12px; color: var(--gray-500); text-align: center; padding: 8px 0; }
+  .db-table-wrap { overflow-x: auto; border-radius: var(--r-md); border: 1px solid var(--gray-200); }
+  .db-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .db-table th { background: var(--gray-50); padding: 8px 12px; text-align: left; font-weight: 700; color: var(--gray-600); border-bottom: 1px solid var(--gray-200); white-space: nowrap; }
+  .db-table td { padding: 7px 12px; border-bottom: 1px solid var(--gray-100); color: var(--gray-700); }
+  .db-table tr:last-child td { border-bottom: none; }
+  .db-table tr:hover td { background: var(--gray-50); }
+
+  /* ── 프로젝트 선택 ───────────────────────────────── */
+  .project-select {
+    width: 100%; padding: 5px 8px; border-radius: 6px;
+    border: 1.5px solid var(--gray-200); background: white;
+    font-family: inherit; font-size: 11px; color: var(--gray-700);
+    cursor: pointer; outline: none; transition: border-color .15s;
+  }
+  .project-select:focus { border-color: var(--red); }
+  .project-select.has-project { border-color: var(--red); background: var(--red-50); color: var(--red); font-weight: 600; }
+  .project-filter-wrap { display: flex; align-items: center; gap: 6px; }
+  .project-filter-label { font-size: 11px; color: var(--gray-500); white-space: nowrap; }
+
+  /* ── 캐스팅 메모 ─────────────────────────────────── */
+  .memo-input {
+    width: 100%; padding: 6px 8px; border-radius: 6px;
+    border: 1.5px solid var(--gray-200); background: white;
+    font-family: inherit; font-size: 11px; color: var(--gray-700);
+    resize: none; outline: none; transition: border-color .15s;
+    min-height: 44px; line-height: 1.5;
+  }
+  .memo-input:focus { border-color: var(--red); }
+  .memo-input::placeholder { color: var(--gray-300); }
+  .memo-section { margin-top: 6px; }
+  .memo-label { font-size: 10px; font-weight: 700; color: var(--gray-400); margin-bottom: 3px; }
+
   /* ── 스크롤바 ────────────────────────────────────── */
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 3px; }
@@ -404,6 +448,11 @@
       <button class="nav-btn" id="nav-final" onclick="switchTab('final')">
         <span class="ni">⭐</span> 최종 누적
         <span class="nav-badge" id="final-badge">0</span>
+      </button>
+
+      <div class="nav-group-label" style="margin-top:12px">데이터베이스</div>
+      <button class="nav-btn" id="nav-db" onclick="switchTab('db')">
+        <span class="ni">🗂️</span> 기존 모델 DB
       </button>
     </div>
 
@@ -465,6 +514,16 @@
       <!-- 1차픽/최종누적 탭 헤더 -->
       <div class="toolbar" id="saved-toolbar" style="display:none">
         <div class="result-info" id="saved-resultInfo">📥 1차 픽</div>
+        <div class="project-filter-wrap">
+          <span class="project-filter-label">프로젝트</span>
+          <select id="projectFilter" class="project-select" style="width:160px"
+            onchange="renderCurrentSavedTab()">
+            <option value="">전체 보기</option>
+            <option value="2026 S/S 룩북">2026 S/S 룩북</option>
+            <option value="2026 F/W 아우터">2026 F/W 아우터</option>
+            <option value="상시 피팅">상시 피팅</option>
+          </select>
+        </div>
       </div>
 
       <div class="cards-wrapper">
@@ -481,6 +540,22 @@
         <div id="savedModelsGrid" style="display:none">
           <div id="pick-list" class="saved-cards-list"></div>
           <div id="final-list" class="saved-cards-list" style="display:none"></div>
+        </div>
+
+        <!-- 기존 모델 DB 탭 -->
+        <div id="dbGrid" style="display:none">
+          <input type="file" id="csvFileInput" accept=".csv" style="display:none" onchange="handleCSVFile(this.files[0])">
+          <div class="db-drop-zone" id="dbDropZone"
+            onclick="document.getElementById('csvFileInput').click()"
+            ondragover="event.preventDefault();this.classList.add('drag-over')"
+            ondragleave="this.classList.remove('drag-over')"
+            ondrop="event.preventDefault();this.classList.remove('drag-over');handleCSVFile(event.dataTransfer.files[0])">
+            <div class="dz-icon">📂</div>
+            <div class="dz-title">노션 CSV 파일을 여기에 드래그하거나 클릭해서 업로드</div>
+            <div class="dz-sub">노션에서 내보낸 .csv 파일을 불러와 DB에 저장해요</div>
+          </div>
+          <div id="importProgress"></div>
+          <div id="dbTableWrap"></div>
         </div>
       </div>
     </div>
@@ -600,34 +675,49 @@ function updateSavedBadge() {
 const RATING_THRESHOLD = 3;
 let currentSidebarTab = 'search';
 
+const PROJECTS = ['2026 S/S 룩북', '2026 F/W 아우터', '상시 피팅'];
+
 function switchTab(tab) {
   currentSidebarTab = tab;
 
-  // 내비 버튼 활성화
-  ['search','pick','final'].forEach(t => {
+  // 내비 버튼 활성화 (db 탭 포함)
+  ['search','pick','final','db'].forEach(t => {
     const btn = document.getElementById(`nav-${t}`);
     if (btn) btn.classList.toggle('active', t === tab);
   });
 
   const isSearch = tab === 'search';
-  // 검색 서브패널 토글
-  document.getElementById('search-panel').classList.toggle('hidden', !isSearch);
-  // 툴바 전환
-  document.getElementById('search-toolbar').style.display  = isSearch ? '' : 'none';
-  document.getElementById('saved-toolbar').style.display   = isSearch ? 'none' : '';
-  // 그리드 전환
-  document.getElementById('cardsGrid').style.display       = isSearch ? '' : 'none';
-  document.getElementById('savedModelsGrid').style.display = isSearch ? 'none' : '';
+  const isDB     = tab === 'db';
+  const isSaved  = tab === 'pick' || tab === 'final';
 
-  if (!isSearch) {
+  document.getElementById('search-panel').classList.toggle('hidden', !isSearch);
+  document.getElementById('search-toolbar').style.display  = isSearch ? '' : 'none';
+  document.getElementById('saved-toolbar').style.display   = isSaved  ? '' : 'none';
+  document.getElementById('cardsGrid').style.display       = isSearch ? '' : 'none';
+  document.getElementById('savedModelsGrid').style.display = isSaved  ? '' : 'none';
+  document.getElementById('dbGrid').style.display          = isDB     ? '' : 'none';
+
+  if (isSaved) {
     document.getElementById('pick-list').style.display  = tab === 'pick'  ? '' : 'none';
     document.getElementById('final-list').style.display = tab === 'final' ? '' : 'none';
-    const title = tab === 'pick' ? '📥 1차 픽' : '⭐ 최종 누적';
-    document.getElementById('saved-resultInfo').textContent = title;
+    document.getElementById('saved-resultInfo').textContent =
+      tab === 'pick' ? '📥 1차 픽' : '⭐ 최종 누적';
   }
 
   if (tab === 'pick')  renderPickTab();
   if (tab === 'final') renderFinalTab();
+}
+
+// 현재 활성 저장 탭 재렌더 (프로젝트 필터 변경 시 호출)
+function renderCurrentSavedTab() {
+  if (currentSidebarTab === 'pick')  renderPickTab();
+  if (currentSidebarTab === 'final') renderFinalTab();
+}
+
+// 프로젝트 필터 적용
+function getProjectFilter() {
+  const el = document.getElementById('projectFilter');
+  return el ? el.value : '';
 }
 
 // ── 다중 평가자 평균 계산 ─────────────────────────────
@@ -670,9 +760,15 @@ function updateTabBadges() {
   if (fb) fb.textContent = finals;
 }
 
+function applyProjectFilter(list) {
+  const pf = getProjectFilter();
+  if (!pf) return list;
+  return list.filter(p => (p.project || '') === pf);
+}
+
 function renderPickTab() {
-  // 최종 조건 미충족(투표 부족 OR 평균 미달) → 1차 픽에 유지
-  const picks = savedModels.filter(p => !isReadyForFinal(p));
+  let picks = savedModels.filter(p => !isReadyForFinal(p));
+  picks = applyProjectFilter(picks);
   updateTabBadges();
   document.getElementById('pick-list').innerHTML = picks.length
     ? picks.map(p => savedModelCard(p)).join('')
@@ -680,8 +776,8 @@ function renderPickTab() {
 }
 
 function renderFinalTab() {
-  // 최종 조건 충족(투표 >= MIN_VOTERS AND 평균 >= 3) → 최종 누적
-  const finals = savedModels.filter(p => isReadyForFinal(p));
+  let finals = savedModels.filter(p => isReadyForFinal(p));
+  finals = applyProjectFilter(finals);
   updateTabBadges();
   document.getElementById('final-list').innerHTML = finals.length
     ? finals.map(p => savedModelCard(p)).join('')
@@ -819,6 +915,23 @@ function savedModelCard(p) {
           <div class="multi-rating">${ratingRows}</div>
           <button class="btn-unsave" onclick="event.stopPropagation();toggleSave('${p.id}')" title="저장 삭제">🗑️</button>
         </div>
+        <!-- 프로젝트 지정 -->
+        <div style="margin-top:6px">
+          <select class="project-select ${p.project ? 'has-project' : ''}"
+            onclick="event.stopPropagation()"
+            onchange="event.stopPropagation();updateProject('${p.id}',this.value);this.className='project-select'+(this.value?' has-project':'')">
+            <option value="">📁 프로젝트 선택</option>
+            ${PROJECTS.map(pr => `<option value="${pr}" ${p.project===pr?'selected':''}>${pr}</option>`).join('')}
+          </select>
+        </div>
+        <!-- 캐스팅 메모 -->
+        <div class="memo-section">
+          <div class="memo-label">📝 캐스팅 & 촬영 메모</div>
+          <textarea class="memo-input" rows="2"
+            placeholder="실물 미팅, 피팅 사이즈, 촬영 기록 등..."
+            onclick="event.stopPropagation()"
+            oninput="debouncedMemo('${p.id}',this.value)">${p.memo || ''}</textarea>
+        </div>
       </div>
     </div>
   </div>`;
@@ -855,6 +968,133 @@ async function updateRating(id, reviewer, score) {
     console.error('별점 저장 실패:', e);
     showToast('⚠️ 별점 저장에 실패했어요. 다시 시도해 주세요.');
   }
+}
+
+// ── 프로젝트 업데이트 ─────────────────────────────────
+async function updateProject(id, project) {
+  const model = savedModels.find(p => p.id === id);
+  if (!model) return;
+  model.project = project;
+  try {
+    const { error } = await db.from('saved_models').update({ post_data: { ...model } }).eq('id', id);
+    if (error) throw error;
+    showToast(project ? `📁 "${project}" 지정됐어요` : '프로젝트 해제됐어요');
+    renderCurrentSavedTab();
+  } catch(e) { console.error('프로젝트 저장 실패:', e); }
+}
+
+// ── 캐스팅 메모 업데이트 (디바운스 300ms) ──────────────
+const _memoTimers = {};
+function debouncedMemo(id, value) {
+  clearTimeout(_memoTimers[id]);
+  _memoTimers[id] = setTimeout(() => updateMemo(id, value), 300);
+}
+
+async function updateMemo(id, memo) {
+  const model = savedModels.find(p => p.id === id);
+  if (!model) return;
+  model.memo = memo;
+  try {
+    await db.from('saved_models').update({ post_data: { ...model } }).eq('id', id);
+  } catch(e) { console.error('메모 저장 실패:', e); }
+}
+
+// ── 노션 CSV 파싱 및 Supabase Import ─────────────────
+function parseCSVLine(line) {
+  const result = []; let cur = ''; let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQuote = !inQuote; }
+    else if (ch === ',' && !inQuote) { result.push(cur.trim()); cur = ''; }
+    else { cur += ch; }
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+function parseCSV(text) {
+  const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = parseCSVLine(lines[0]).map(h => h.replace(/"/g,'').trim());
+  return lines.slice(1).map(line => {
+    const vals = parseCSVLine(line);
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = (vals[i] || '').replace(/"/g,'').trim(); });
+    return obj;
+  }).filter(row => Object.values(row).some(v => v));
+}
+
+// 노션 컬럼명 → post_data 필드 매핑
+function mapRowToPostData(row) {
+  const get = (...keys) => keys.map(k => row[k] || row[k.toLowerCase()] || '').find(v => v) || '';
+
+  const username = get('인스타ID','인스타그램','Instagram','@ID','username','인스타')
+                   .replace(/^@/,'').trim();
+  const fullName = get('이름','Name','name','모델명');
+  const height   = get('키','Height','height','신장');
+  const weight   = get('몸무게','Weight','weight','체중');
+  const age      = get('나이','출생','Age','생년','년생');
+  const note     = get('특징','Notes','메모','비고','특이사항','Memo');
+  const category = get('카테고리','Category','분류');
+
+  const bioArr = [height&&`키 ${height}`, weight&&`몸무게 ${weight}`, age&&`${age}`].filter(Boolean);
+
+  return {
+    id:        'notion_' + Date.now() + '_' + Math.random().toString(36).substr(2,5),
+    username:  username || fullName.replace(/\s/g,'') || '알수없음',
+    fullName,
+    biography: bioArr.join(' / '),
+    caption:   [note, category].filter(Boolean).join(' | '),
+    imgUrl:    '',
+    permalink: username ? `https://www.instagram.com/${username}/` : '',
+    likes:     0, comments: 0, followers: null,
+    timestamp: '', type: 'Notion', _real: false,
+    ratings:   { nicole: 0, rachel: 0, stella: 0 },
+    _source:   'notion'
+  };
+}
+
+async function handleCSVFile(file) {
+  if (!file || !file.name.endsWith('.csv')) { showToast('⚠️ CSV 파일만 업로드할 수 있어요'); return; }
+  const progress = document.getElementById('importProgress');
+  progress.innerHTML = `<div class="import-progress">📂 파일 읽는 중...</div>`;
+
+  const text = await file.text();
+  const rows = parseCSV(text);
+  if (!rows.length) { progress.innerHTML = `<div class="import-progress">⚠️ 데이터를 읽지 못했어요</div>`; return; }
+
+  progress.innerHTML = `<div class="import-progress">⏳ ${rows.length}개 데이터 Supabase에 저장 중...</div>`;
+
+  let success = 0, skip = 0;
+  for (const row of rows) {
+    const postData = mapRowToPostData(row);
+    if (savedIds.has(postData.id) || postData.username === '알수없음') { skip++; continue; }
+    try {
+      const { error } = await db.from('saved_models').insert({ id: postData.id, post_data: postData });
+      if (!error) {
+        savedModels.push(postData);
+        savedIds.add(postData.id);
+        success++;
+      }
+    } catch(e) { skip++; }
+  }
+
+  updateSavedBadge();
+  renderPickTab();
+  renderFinalTab();
+
+  // 미리보기 테이블
+  const cols = Object.keys(rows[0]).slice(0, 6);
+  const tableHTML = `
+    <div class="db-table-wrap">
+      <table class="db-table">
+        <thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+        <tbody>${rows.slice(0,20).map(r=>`<tr>${cols.map(c=>`<td>${r[c]||''}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+  progress.innerHTML = `<div class="import-progress" style="color:#10b981;font-weight:700">
+    ✅ ${success}개 저장 완료 (중복/오류 ${skip}개 제외) — 총 ${rows.length}개 행</div>` + tableHTML;
+  showToast(`✅ 노션 데이터 ${success}개 가져왔어요!`);
 }
 
 // ── 초기화 ────────────────────────────────────────────
