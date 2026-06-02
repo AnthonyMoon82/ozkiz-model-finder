@@ -767,9 +767,8 @@ function isReadyForFinal(p) {
 }
 
 function updateTabBadges() {
-  const picks  = savedModels.filter(p => !isReadyForFinal(p)).length;
-  const finals = savedModels.filter(p =>  isReadyForFinal(p)).length;
-  const pb = document.getElementById('pick-badge');
+  const picks  = savedModels.filter(p => !isReadyForFinal(p) && !isNotionData(p)).length;
+  const finals = savedModels.filter(p =>  isReadyForFinal(p) && !isNotionData(p)).length;  const pb = document.getElementById('pick-badge');
   const fb = document.getElementById('final-badge');
   if (pb) pb.textContent = picks;
   if (fb) fb.textContent = finals;
