@@ -1010,7 +1010,7 @@ function openModelDetailModal(id) {
   const heightVal = p.height  ? p.height  + 'cm' : sp.height  || '—';
   const weightVal = p.weight  ? p.weight  + 'kg' : sp.weight  || '—';
   const birthVal  = p.birthDate || sp.birth || '—';
-  const footVal   = (p.footSize || p.foot) ? (p.footSize || p.foot) + 'mm' : '—';
+  const footVal   = (p.footSize || p.shoeSize || p.foot) ? (p.footSize || p.shoeSize || p.foot) + 'mm' : '—';
 
   const field = (label, value, link) => {
     const display = value && value !== '—'
@@ -1530,31 +1530,46 @@ function mapRowToPostData(row) {
     clean[k] || clean[k.toLowerCase()] || ''
   ).find(v => v) || '';
 
+  // 헤더에 특정 문자열이 포함된 키 값 찾기 (이모지·괄호 포함 헤더 대응)
+  const getByIncludes = (...keywords) => {
+    for (const kw of keywords) {
+      const found = Object.entries(clean).find(([k]) => k.includes(kw));
+      if (found && found[1]) return found[1];
+    }
+    return '';
+  };
+
   // ── 기본 정보 ─────────────────────────────────────
-  const fullName = get('이름','Name','name','모델명','성명');
-  const rawInsta = get('인스타ID','인스타','인스타그램','Instagram','@ID','username','SNS');
-  const username = rawInsta.replace(/^@/,'').replace(/https?:\/\/.*instagram\.com\//,'').replace(/\//g,'').trim();
+  const fullName = getByIncludes('이름') || get('Name','name','모델명','성명');
+
+  const rawInsta = getByIncludes('인스타그램','인스타') || get('Instagram','@ID','username','SNS');
+  // URL 형태(https://www.instagram.com/xxx/) → 아이디만 추출
+  const username = rawInsta
+    .replace(/https?:\/\/(?:www\.)?instagram\.com\//i, '')
+    .replace(/\?.*/,'').replace(/\//g,'').replace(/^@/,'').trim();
 
   // ── 신체 스펙 ─────────────────────────────────────
-  const height   = get('키','Height','height','신장');
-  const weight   = get('몸무게','Weight','weight','체중');
-  const footSize = get('발사이즈','발 사이즈','FootSize','발','shoeSize','신발사이즈');
+  // '키(cm)' 처럼 괄호 포함 헤더 대응
+  const height   = getByIncludes('키(cm)','키(Cm)','키(CM)') || get('키','Height','height','신장');
+  const weight   = getByIncludes('체중(Kg)','체중(kg)','체중(KG)') || get('몸무게','Weight','weight','체중');
+  const footSize = getByIncludes('발사이즈(mm)','발사이즈(MM)','발사이즈') || get('발 사이즈','신발사이즈','shoeSize');
 
   // ── 나이/출생 ─────────────────────────────────────
-  const birthDate = get('생년월일','출생','나이','Age','생년','년생','출생연도','Birth','birthday');
+  const birthDate = getByIncludes('출생년도','생년월일','출생연도') || get('나이','Age','생년','년생','Birth','birthday');
 
   // ── 인적사항 ─────────────────────────────────────
-  const gender      = get('성별','Gender','gender');
-  const nationality = get('국적','Nationality','nationality') || '한국';
+  const gender      = getByIncludes('성별') || get('Gender','gender');
+  const nationality = getByIncludes('국적') || get('Nationality','nationality') || '한국';
 
   // ── 실무 정보 ─────────────────────────────────────
-  const phone     = get('연락처','전화번호','Phone','phone','핸드폰','Tel','tel');
-  const location  = get('거주지','주소','Address','location','지역','거주');
-  const category  = get('카테고리','Category','분류','타입','type');
-  const shootDate = get('촬영일','촬영날짜','Shoot','shoot_date','촬영');
-  const fee       = get('촬영료','페이','Pay','fee','금액','단가');
-  const status    = get('진행여부','진행','상태','Status','status');
-  const note      = get('특징','Notes','메모','비고','특이사항','Memo','코멘트','Comment','comment');
+  const phone     = getByIncludes('연락처','전화번호') || get('Phone','phone','핸드폰','Tel');
+  const location  = getByIncludes('거주지','주소','지역') || get('Address','location');
+  const category  = getByIncludes('카테고리') || get('Category','분류','타입');
+  const shootDate = getByIncludes('촬영일') || get('촬영날짜','Shoot','shoot_date');
+  const status    = getByIncludes('진행여부','진행 여부') || get('Status','상태');
+  // 이모지 포함 헤더: '💰 촬영료(H)', '💬 코멘트'
+  const fee       = getByIncludes('촬영료','페이') || get('Pay','fee','금액','단가');
+  const note      = getByIncludes('코멘트','메모','비고','특이사항') || get('Notes','Memo','Comment','comment');
 
   // ── biography: 기존 정규식 추출기와 호환 ───────────
   const bioArr = [
@@ -1578,7 +1593,8 @@ function mapRowToPostData(row) {
     // ── 상세 필드 (상세 팝업에서 사용) ───────────────
     height,
     weight,
-    footSize,
+    footSize,    // 직접등록과 호환
+    shoeSize: footSize,  // CSV 매핑 필드명
     birthDate,
     gender,
     nationality,
