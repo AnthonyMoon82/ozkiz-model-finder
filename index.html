@@ -550,7 +550,13 @@
 
       <div class="nav-group-label" style="margin-top:12px">데이터베이스</div>
       <button class="nav-btn" id="nav-db" onclick="switchTab('db')">
-        <span class="ni">🗂️</span> 기존 모델 DB
+        <span class="ni">🗂️</span> 모델 DB
+      </button>
+      <button class="nav-btn" id="nav-outsource" onclick="switchTab('outsource')">
+        <span class="ni">🌐</span> 외주 DB
+      </button>
+      <button class="nav-btn" id="nav-studio" onclick="switchTab('studio')">
+        <span class="ni">📸</span> 스튜디오 DB
       </button>
     </div>
 
@@ -643,6 +649,11 @@
         <!-- 기존 모델 DB 탭 -->
         <div id="dbGrid" style="display:none">
 
+          <!-- DB 탭 타이틀 -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div style="font-size:16px;font-weight:800;color:var(--gray-900)" id="dbTabTitle">🗂️ 모델 DB</div>
+          </div>
+
           <!-- 상단 액션 버튼 -->
           <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
             <button onclick="openManualAddModal()"
@@ -689,10 +700,7 @@
     <div class="detail-modal-header">
       <div style="font-size:15px;font-weight:800" id="detailModalTitle">모델 상세 정보</div>
       <div style="display:flex;gap:6px;align-items:center">
-        <button id="editModeBtn" onclick="toggleDetailEditMode()"
-          style="padding:5px 12px;border:1.5px solid var(--gray-200);border-radius:8px;background:white;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-600)">
-          ✏️ 정보 수정
-        </button>
+        <span style="font-size:11px;color:var(--gray-400)">클릭하여 수정</span>
         <button onclick="closeModelDetailModal()" style="width:30px;height:30px;border-radius:50%;border:none;background:var(--gray-100);cursor:pointer;font-size:16px;color:var(--gray-600)">✕</button>
       </div>
     </div>
@@ -929,28 +937,33 @@ function updateSavedBadge() {
 // ── 탭 전환 (새 레이아웃) ─────────────────────────────
 const RATING_THRESHOLD = 3;
 let currentSidebarTab = 'search';
+let currentDbType     = 'model';   // 현재 활성 DB 탭 타입 (model/outsource/studio)
+
+// db_type → 탭 ID 매핑
+const DB_TYPE_MAP = { db: 'model', outsource: 'outsource', studio: 'studio' };
+const DB_TYPE_LABEL = { model: '🗂️ 모델 DB', outsource: '🌐 외주 DB', studio: '📸 스튜디오 DB' };
 
 const PROJECTS = ['2026 S/S 룩북', '2026 F/W 아우터', '상시 피팅'];
 
 function switchTab(tab) {
   currentSidebarTab = tab;
 
-  // 내비 버튼 활성화 (db 탭 포함)
-  ['search','pick','final','db'].forEach(t => {
+  // 내비 버튼 활성화
+  ['search','pick','final','db','outsource','studio'].forEach(t => {
     const btn = document.getElementById(`nav-${t}`);
     if (btn) btn.classList.toggle('active', t === tab);
   });
 
   const isSearch = tab === 'search';
-  const isDB     = tab === 'db';
   const isSaved  = tab === 'pick' || tab === 'final';
+  const isDBTab  = ['db','outsource','studio'].includes(tab);
 
   document.getElementById('search-panel').classList.toggle('hidden', !isSearch);
   document.getElementById('search-toolbar').style.display  = isSearch ? '' : 'none';
   document.getElementById('saved-toolbar').style.display   = isSaved  ? '' : 'none';
   document.getElementById('cardsGrid').style.display       = isSearch ? '' : 'none';
   document.getElementById('savedModelsGrid').style.display = isSaved  ? '' : 'none';
-  document.getElementById('dbGrid').style.display          = isDB     ? '' : 'none';
+  document.getElementById('dbGrid').style.display          = isDBTab  ? '' : 'none';
 
   if (isSaved) {
     document.getElementById('pick-list').style.display  = tab === 'pick'  ? '' : 'none';
@@ -961,7 +974,10 @@ function switchTab(tab) {
 
   if (tab === 'pick')  renderPickTab();
   if (tab === 'final') renderFinalTab();
-  if (tab === 'db')    renderNotionDBTab();
+  if (isDBTab) {
+    currentDbType = DB_TYPE_MAP[tab] || 'model';
+    renderInternalDBTab(currentDbType);
+  }
 }
 
 // 현재 활성 저장 탭 재렌더 (프로젝트 필터 변경 시 호출)
@@ -1045,7 +1061,6 @@ async function updateStatus(id, newStatus) {
 
 // 현재 열린 상세 모달 ID + 편집모드 상태
 let currentDetailModelId = null;
-let detailEditMode = false;
 
 function updateTabBadges() {
   const picks  = savedModels.filter(p => !isReadyForFinal(p)).length;
@@ -1078,11 +1093,9 @@ function toggleCSVZone(btn) {
 // ── 모델 상세 팝업 ────────────────────────────────────
 function openModelDetailModal(id) {
   currentDetailModelId = id;
-  detailEditMode = false;
   const p = savedModels.find(m => m.id === id);
   if (!p) return;
   document.getElementById('detailModalTitle').textContent = p.fullName || p.username || '모델 정보';
-  document.getElementById('editModeBtn').textContent = '✏️ 정보 수정';
   renderDetailView(p);
   document.getElementById('modelDetailModal').classList.add('open');
 }
@@ -1103,11 +1116,17 @@ function renderDetailView(p) {
   const igUrl     = p.username && p.username !== '알수없음' ? `https://www.instagram.com/${p.username}/` : '';
   const memoText  = [p.memo || p.comment, p.caption].filter(Boolean).join('\n\n').trim();
 
-  const field = (label, value, link) => {
-    const display = value && value !== '—'
-      ? (link ? `<a href="${link}" target="_blank">${value}</a>` : value)
-      : '<span style="color:var(--gray-300)">—</span>';
-    return `<div class="detail-field"><div class="detail-field-label">${label}</div><div class="detail-field-value">${display}</div></div>`;
+  // fieldKey 있으면 인라인 편집 가능, 없으면 읽기 전용
+  const field = (label, value, link, fieldKey) => {
+    const raw     = value && value !== '—' ? value : '';
+    const display = raw
+      ? (link ? `<a href="${link}" target="_blank">${raw}</a>` : raw)
+      : '<span style=\'color:var(--gray-300)\'>—</span>';
+    const editAttr = fieldKey
+      ? `onclick="inlineEditField(event,'${p.id}','${fieldKey}','${String(raw).replace(/'/g,"\'")}')"
+         style="cursor:pointer" title="클릭하여 수정"`
+      : '';
+    return `<div class="detail-field" ${editAttr}><div class="detail-field-label">${label}${fieldKey ? ' ✎' : ''}</div><div class="detail-field-value">${display}</div></div>`;
   };
 
   // 갤러리
@@ -1151,30 +1170,30 @@ function renderDetailView(p) {
     <div class="detail-section">
       <div class="detail-section-title">👤 기본 정보</div>
       <div class="detail-grid cols-3">
-        ${field('생년월일', birthVal)}
-        ${field('성별', p.gender || '—')}
-        ${field('국적', p.nationality || '한국')}
+        ${field('생년월일', birthVal, null, 'birthDate')}
+        ${field('성별', p.gender || '—', null, 'gender')}
+        ${field('국적', p.nationality || '한국', null, 'nationality')}
       </div>
     </div>
 
     <div class="detail-section">
       <div class="detail-section-title">📏 신체 스펙</div>
       <div class="detail-grid cols-3">
-        ${field('키', heightVal)}
-        ${field('체중', weightVal)}
-        ${field('발사이즈', footVal)}
+        ${field('키', heightVal, null, 'height')}
+        ${field('체중', weightVal, null, 'weight')}
+        ${field('발사이즈', footVal, null, 'footSize')}
       </div>
     </div>
 
     <div class="detail-section">
       <div class="detail-section-title">📋 실무 정보</div>
       <div class="detail-grid">
-        ${field('연락처', p.phone || '—')}
-        ${field('거주지', p.location || '—')}
-        ${field('촬영일', p.shootDate || '—')}
-        ${field('촬영료', p.fee || '—')}
-        ${field('카테고리', p.category || '—')}
-        ${field('인스타그램', igUrl ? '@' + p.username : '—', igUrl)}
+        ${field('연락처', p.phone || '—', null, 'phone')}
+        ${field('거주지', p.location || '—', null, 'location')}
+        ${field('촬영일', p.shootDate || '—', null, 'shootDate')}
+        ${field('촬영료', p.fee || '—', null, 'fee')}
+        ${field('카테고리', p.category || '—', null, 'category')}
+        ${field('인스타그램', igUrl ? '@' + p.username : '—', igUrl, 'username')}
       </div>
     </div>
 
@@ -1197,119 +1216,83 @@ function renderDetailView(p) {
     </div>`;
 }
 
-// ── 편집 모드 토글 ─────────────────────────────────
-function toggleDetailEditMode() {
-  const p = savedModels.find(m => m.id === currentDetailModelId);
-  if (!p) return;
-  detailEditMode = !detailEditMode;
-  document.getElementById('editModeBtn').textContent = detailEditMode ? '✕ 취소' : '✏️ 정보 수정';
-  if (detailEditMode) renderDetailEditForm(p);
-  else renderDetailView(p);
-}
 
-function renderDetailEditForm(p) {
-  const ef = (label, key, type='text', placeholder='') =>
-    `<div class="form-field">
-      <label class="form-label">${label}</label>
-      <input class="edit-input" id="ef-${key}" type="${type}" value="${(p[key]||'').toString().replace(/"/g,'&quot;')}" placeholder="${placeholder}">
-    </div>`;
 
-  const statusOpts = STATUS_OPTIONS.map(s =>
-    `<option value="${s}" ${s===(p.status||'')?'selected':''}>${s}</option>`).join('');
+// ── 인라인 편집 (클릭 즉시 수정, 노션 스타일) ──────────
+function inlineEditField(event, modelId, fieldKey, currentValue) {
+  event.stopPropagation();
+  const cell = event.currentTarget;
+  if (cell.querySelector('input,textarea,select')) return;
 
-  document.getElementById('detailModalBody').innerHTML = `
-    <div class="form-section-title">📌 기본 정보</div>
-    <div class="form-grid">
-      ${ef('이름','fullName','text','홍길동')}
-      <div class="form-field">
-        <label class="form-label">진행여부</label>
-        <select class="edit-input" id="ef-status">${statusOpts}</select>
-      </div>
-      ${ef('생년월일','birthDate','text','2016년생')}
-      <div class="form-field">
-        <label class="form-label">성별</label>
-        <select class="edit-input" id="ef-gender">
-          <option value="">선택</option>
-          ${['여','남'].map(g=>`<option ${p.gender===g?'selected':''}>${g}</option>`).join('')}
-        </select>
-      </div>
-      ${ef('국적','nationality','text','한국')}
-      ${ef('카테고리','category','text','키즈')}
-    </div>
-    <div class="form-section-title" style="margin-top:14px">📏 신체 스펙</div>
-    <div class="form-grid cols-3">
-      ${ef('키 (cm)','height','number')}
-      ${ef('체중 (kg)','weight','number')}
-      ${ef('발사이즈 (mm)','footSize','number')}
-    </div>
-    <div class="form-section-title" style="margin-top:14px">📋 실무 정보</div>
-    <div class="form-grid">
-      ${ef('인스타그램 ID','username','text','username')}
-      ${ef('연락처','phone','tel','010-0000-0000')}
-      ${ef('거주지','location','text','서울')}
-      ${ef('촬영일','shootDate','date')}
-      ${ef('촬영료','fee','text','30만원')}
-    </div>
-    <div class="form-section-title" style="margin-top:14px">📝 메모</div>
-    <textarea class="edit-textarea" id="ef-memo" placeholder="코멘트, 실물 인상, 촬영 메모...">${p.memo || p.comment || ''}</textarea>
+  const valueDiv = cell.querySelector('.detail-field-value');
+  if (!valueDiv) return;
 
-    <div style="display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--gray-100)">
-      <button onclick="saveDetailEdit()"
-        style="flex:1;padding:11px;background:var(--red);color:white;border:none;border-radius:var(--r-md);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">
-        💾 저장
-      </button>
-      <button onclick="toggleDetailEditMode()"
-        style="padding:11px 16px;background:var(--gray-100);color:var(--gray-600);border:none;border-radius:var(--r-md);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">
-        취소
-      </button>
-    </div>`;
-}
+  const rawVal = (!currentValue || currentValue === '—') ? '' : String(currentValue);
+  const isArea = ['memo','comment','caption'].includes(fieldKey);
+  const isSel  = fieldKey === 'gender';
 
-async function saveDetailEdit() {
-  const model = savedModels.find(m => m.id === currentDetailModelId);
-  if (!model) return;
-
-  const g = id => (document.getElementById(id)?.value || '').trim();
-
-  Object.assign(model, {
-    fullName:  g('ef-fullName'),
-    status:    g('ef-status'),
-    birthDate: g('ef-birthDate'),
-    gender:    g('ef-gender'),
-    nationality: g('ef-nationality'),
-    category:  g('ef-category'),
-    height:    g('ef-height'),
-    weight:    g('ef-weight'),
-    footSize:  g('ef-footSize'),
-    shoeSize:  g('ef-footSize'),
-    username:  g('ef-username'),
-    phone:     g('ef-phone'),
-    location:  g('ef-location'),
-    shootDate: g('ef-shootDate'),
-    fee:       g('ef-fee'),
-    memo:      g('ef-memo'),
-  });
-  // biography 갱신
-  const bioArr = [
-    model.height && `키 ${model.height}`,
-    model.weight && `몸무게 ${model.weight}`,
-    model.birthDate,
-  ].filter(Boolean);
-  model.biography = bioArr.join(' / ');
-  model.permalink = model.username ? `https://www.instagram.com/${model.username}/` : '';
-
-  try {
-    const { error } = await db.from('saved_models').update({ post_data: { ...model } }).eq('id', model.id);
-    if (error) throw error;
-    document.getElementById('detailModalTitle').textContent = model.fullName || model.username || '모델 정보';
-    detailEditMode = false;
-    document.getElementById('editModeBtn').textContent = '✏️ 정보 수정';
-    renderDetailView(model);
-    renderNotionDBTab();
-    showToast('✅ 정보가 수정됐어요!');
-  } catch(e) {
-    showToast('⚠️ 저장 실패: ' + (e.message || ''));
+  let el;
+  if (isSel) {
+    el = document.createElement('select');
+    el.className = 'edit-input';
+    ['', '여', '남'].forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = v || '선택';
+      if (v === rawVal) opt.selected = true;
+      el.appendChild(opt);
+    });
+  } else if (isArea) {
+    el = document.createElement('textarea');
+    el.className = 'edit-textarea';
+    el.value = rawVal; el.rows = 3;
+  } else {
+    el = document.createElement('input');
+    el.className = 'edit-input';
+    el.type = fieldKey === 'shootDate' ? 'date' : 'text';
+    el.value = rawVal;
   }
+  el.style.width = '100%';
+
+  const save = async () => {
+    const newVal = el.value.trim();
+    await saveInlineField(modelId, fieldKey, newVal);
+    valueDiv.textContent = newVal || '—';
+    el.replaceWith(valueDiv);
+  };
+  el.addEventListener('blur', save);
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !isArea) { e.preventDefault(); el.blur(); }
+    if (e.key === 'Escape') { el.value = rawVal; el.blur(); }
+  });
+
+  valueDiv.innerHTML = '';
+  valueDiv.appendChild(el);
+  el.focus();
+  try { if (!isSel) el.select(); } catch(e) {}
+}
+
+async function saveInlineField(id, key, value) {
+  const model = savedModels.find(m => m.id === id);
+  if (!model) return;
+  model[key] = value;
+  if (key === 'footSize') model.shoeSize = value;
+  if (key === 'shoeSize') model.footSize = value;
+  if (key === 'fullName') {
+    const t = document.getElementById('detailModalTitle');
+    if (t) t.textContent = value || '모델 정보';
+  }
+  if (['height','weight','birthDate'].includes(key)) {
+    model.biography = [
+      model.height && ('키 ' + model.height),
+      model.weight && ('몸무게 ' + model.weight),
+      model.birthDate,
+    ].filter(Boolean).join(' / ');
+  }
+  if (key === 'username') model.permalink = value ? 'https://www.instagram.com/' + value + '/' : '';
+  try {
+    await db.from('saved_models').update({ post_data: { ...model } }).eq('id', id);
+    renderInternalDBTab(currentDbType);
+  } catch(e) { console.error('인라인 저장 실패:', e); }
 }
 
 // ── 사진 업로드 (Supabase Storage) ───────────────────
@@ -1390,6 +1373,7 @@ async function saveManualModel() {
     timestamp: new Date().toISOString(),
     type: 'Manual', _real: false,
     source:   'manual',
+    db_type:  currentDbType || 'model',  // 현재 활성 DB 탭
     // 추가 필드
     status:      document.getElementById('mf-status').value,
     gender:      document.getElementById('mf-gender').value,
@@ -1443,8 +1427,20 @@ function renderFinalTab() {
 }
 
 // 기존 모델 DB 탭 — 노션 데이터만 렌더링
-function renderNotionDBTab() {
-  const list = savedModels.filter(isInternalData); // 노션 + 직접등록 모두 표시
+// 모든 renderNotionDBTab 호출 → renderInternalDBTab으로 리다이렉트
+function renderNotionDBTab() { renderInternalDBTab(currentDbType || 'model'); }
+
+function renderInternalDBTab(dbType) {
+  // DB 탭 상단 타이틀 업데이트
+  const titleEl = document.getElementById('dbTabTitle');
+  if (titleEl) titleEl.textContent = DB_TYPE_LABEL[dbType] || '모델 DB';
+
+  // db_type 기준 필터 (하위 호환: db_type 없는 기존 데이터는 'model'로 간주)
+  const list = savedModels.filter(p => {
+    if (!isInternalData(p)) return false;
+    const t = p.db_type || 'model';
+    return t === dbType;
+  });
   const el = document.getElementById('notionModelsList');
   if (!el) return;
   const total    = list.length;
@@ -1844,6 +1840,7 @@ function mapRowToPostData(row) {
     timestamp: '', type: 'Notion', _real: false,
     source:    'notion',
     _source:   'notion',
+    db_type:   currentDbType || 'model',  // CSV 업로드 시 현재 탭 반영
     // ── 상세 필드 (상세 팝업에서 사용) ───────────────
     height,
     weight,
