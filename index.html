@@ -1063,8 +1063,8 @@ async function updateStatus(id, newStatus) {
 let currentDetailModelId = null;
 
 function updateTabBadges() {
-  const picks  = savedModels.filter(p => !isReadyForFinal(p)).length;
-  const finals = savedModels.filter(p =>  isReadyForFinal(p)).length;
+  const picks  = savedModels.filter(p => !isReadyForFinal(p) && !isNotionData(p)).length;
+  const finals = savedModels.filter(p =>  isReadyForFinal(p) && !isNotionData(p)).length;
   const pb = document.getElementById('pick-badge');
   const fb = document.getElementById('final-badge');
   if (pb) pb.textContent = picks;
@@ -1173,6 +1173,7 @@ function renderDetailView(p) {
         ${field('생년월일', birthVal, null, 'birthDate')}
         ${field('성별', p.gender || '—', null, 'gender')}
         ${field('국적', p.nationality || '한국', null, 'nationality')}
+        ${p.db_type === 'model' || !p.db_type ? field('옷사이즈', p.clothesSize || '—', null, 'clothesSize') : ''}
       </div>
     </div>
 
@@ -1455,12 +1456,17 @@ function renderInternalDBTab(dbType) {
     총 ${total}명 · 직접등록 ${manualCnt}명 · CSV ${notionCnt}명
   </div>` + list.map(p => {
     const sp = extractChildProfile(p);
-    // 직접등록은 height/weight 필드 우선 사용
-    const heightVal = p.height ? p.height + 'cm' : sp.height;
-    const weightVal = p.weight ? p.weight + 'kg' : sp.weight;
-    const birthVal  = sp.birth || '';
-    const badges = [heightVal, weightVal, birthVal].filter(Boolean)
+    const heightVal     = p.height   ? p.height   + 'cm' : sp.height;
+    const weightVal     = p.weight   ? p.weight   + 'kg' : sp.weight;
+    const footSizeVal   = (p.footSize || p.shoeSize) ? (p.footSize || p.shoeSize) + 'mm' : '';
+    const birthVal      = sp.birth || '';
+    // 스펙 배지: 키 · 체중 · 발사이즈 · 나이
+    const badges = [heightVal, weightVal, footSizeVal, birthVal].filter(Boolean)
       .map(v => `<span class="profile-badge">${v}</span>`).join('');
+    // 옷사이즈 배지 (있을 때만)
+    const clothesBadge = p.clothesSize
+      ? `<span class="profile-badge" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe">${p.clothesSize}</span>`
+      : '';
     const statusBadge = statusBadgeHTML(p.id, p.status || '미정', '10px');
     const igLink = p.username && p.username !== '알수없음'
       ? `<a href="https://www.instagram.com/${p.username}/" target="_blank"
@@ -1480,7 +1486,7 @@ function renderInternalDBTab(dbType) {
         <div style="min-width:0">
           <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
             <span style="font-weight:700;font-size:13px">${p.fullName || p.username}</span>
-            ${statusBadge}${sourceDot}
+            ${statusBadge}${clothesBadge}${sourceDot}
           </div>
           <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:2px">${igLink}${badges}</div>
           ${cleanNote ? `<div style="font-size:11px;color:var(--gray-500);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:380px">${cleanNote}</div>` : ''}
@@ -1767,96 +1773,140 @@ function parseCSV(text) {
 }
 
 // 노션 CSV 행 → post_data 변환 (지저분한 컬럼명 정제 포함)
-function mapRowToPostData(row) {
-  // "Related to ...", URL 포함 컬럼 완전 무시
+// ── CSV 행 파싱 공통 헬퍼 ─────────────────────────────
+function cleanRow(row) {
   const clean = {};
   for (const [k, v] of Object.entries(row)) {
     if (/Related to|notion\.so|app\.notion|http/i.test(k)) continue;
     if (/Related to|notion\.so|app\.notion/i.test(v)) continue;
     clean[k] = v;
   }
-
-  const get = (...keys) => keys.map(k =>
-    clean[k] || clean[k.toLowerCase()] || ''
-  ).find(v => v) || '';
-
-  // 헤더에 특정 문자열이 포함된 키 값 찾기 (이모지·괄호 포함 헤더 대응)
-  const getByIncludes = (...keywords) => {
-    for (const kw of keywords) {
-      const found = Object.entries(clean).find(([k]) => k.includes(kw));
-      if (found && found[1]) return found[1];
+  const get = (...keys) => keys.map(k => clean[k] || clean[k.toLowerCase()] || '').find(v => v) || '';
+  const gi  = (...kws) => {
+    for (const kw of kws) {
+      const f = Object.entries(clean).find(([k]) => k.includes(kw));
+      if (f && f[1]) return f[1];
     }
     return '';
   };
+  return { clean, get, gi };
+}
 
-  // ── 기본 정보 ─────────────────────────────────────
-  const fullName = getByIncludes('이름') || get('Name','name','모델명','성명');
+function extractInstagram(raw) {
+  return raw.replace(/https?:\/\/(?:www\.)?instagram\.com\//i,'')
+            .replace(/\?.*/,'').replace(/\//g,'').replace(/^@/,'').trim();
+}
 
-  const rawInsta = getByIncludes('인스타그램','인스타') || get('Instagram','@ID','username','SNS');
-  // URL 형태(https://www.instagram.com/xxx/) → 아이디만 추출
-  const username = rawInsta
-    .replace(/https?:\/\/(?:www\.)?instagram\.com\//i, '')
-    .replace(/\?.*/,'').replace(/\//g,'').replace(/^@/,'').trim();
-
-  // ── 신체 스펙 ─────────────────────────────────────
-  // '키(cm)' 처럼 괄호 포함 헤더 대응
-  const height   = getByIncludes('키(cm)','키(Cm)','키(CM)') || get('키','Height','height','신장');
-  const weight   = getByIncludes('체중(Kg)','체중(kg)','체중(KG)') || get('몸무게','Weight','weight','체중');
-  const footSize = getByIncludes('발사이즈(mm)','발사이즈(MM)','발사이즈') || get('발 사이즈','신발사이즈','shoeSize');
-
-  // ── 나이/출생 ─────────────────────────────────────
-  const birthDate = getByIncludes('출생년도','생년월일','출생연도') || get('나이','Age','생년','년생','Birth','birthday');
-
-  // ── 인적사항 ─────────────────────────────────────
-  const gender      = getByIncludes('성별') || get('Gender','gender');
-  const nationality = getByIncludes('국적') || get('Nationality','nationality') || '한국';
-
-  // ── 실무 정보 ─────────────────────────────────────
-  const phone     = getByIncludes('연락처','전화번호') || get('Phone','phone','핸드폰','Tel');
-  const location  = getByIncludes('거주지','주소','지역') || get('Address','location');
-  const category  = getByIncludes('카테고리') || get('Category','분류','타입');
-  const shootDate = getByIncludes('촬영일') || get('촬영날짜','Shoot','shoot_date');
-  const status    = getByIncludes('진행여부','진행 여부') || get('Status','상태');
-  // 이모지 포함 헤더: '💰 촬영료(H)', '💬 코멘트'
-  const fee       = getByIncludes('촬영료','페이') || get('Pay','fee','금액','단가');
-  const note      = getByIncludes('코멘트','메모','비고','특이사항') || get('Notes','Memo','Comment','comment');
-
-  // ── biography: 기존 정규식 추출기와 호환 ───────────
-  const bioArr = [
-    height   && `키 ${height}`,
-    weight   && `몸무게 ${weight}`,
-    birthDate,
-  ].filter(Boolean);
-
+function basePostData(fullName, username, note, dbType) {
   return {
     id:        `notion_${Date.now()}_${Math.random().toString(36).substr(2,5)}`,
     username:  username || fullName.replace(/\s/g,'') || '알수없음',
     fullName,
-    biography:   bioArr.join(' / '),
-    caption:     [note, category].filter(Boolean).join(' | '),
-    imgUrl:      '',
-    permalink:   username ? `https://www.instagram.com/${username}/` : '',
-    likes: 0, comments: 0, followers: null,
-    timestamp: '', type: 'Notion', _real: false,
-    source:    'notion',
-    _source:   'notion',
-    db_type:   currentDbType || 'model',  // CSV 업로드 시 현재 탭 반영
-    // ── 상세 필드 (상세 팝업에서 사용) ───────────────
-    height,
-    weight,
-    footSize,    // 직접등록과 호환
-    shoeSize: footSize,  // CSV 매핑 필드명
-    birthDate,
-    gender,
-    nationality,
-    phone,
-    location,
-    category,
-    shootDate,
-    fee,
-    status,
-    memo:    note,
+    imgUrl: '', likes: 0, comments: 0, followers: null,
+    timestamp: '', _real: false,
+    source: 'notion', _source: 'notion',
+    db_type: dbType || currentDbType || 'model',
+    memo: note,
     ratings: { nicole: 0, rachel: 0, stella: 0 },
+  };
+}
+
+// ── db_type별 CSV 매핑 라우터 ─────────────────────────
+function mapRowToPostData(row, dbType) {
+  const type = dbType || currentDbType || 'model';
+  if (type === 'outsource') return mapOutsourceRow(row);
+  if (type === 'studio')    return mapStudioRow(row);
+  return mapModelRow(row);
+}
+
+// ── 🗂️ 모델 DB CSV 매핑 ───────────────────────────────
+function mapModelRow(row) {
+  const { get, gi } = cleanRow(row);
+
+  const fullName    = gi('이름') || get('Name','name','모델명','성명');
+  const username    = extractInstagram(gi('인스타그램','인스타') || get('Instagram','@ID','username'));
+  const height      = gi('키(cm)','키(Cm)','키(CM)') || get('키','height','신장');
+  const weight      = gi('체중(Kg)','체중(kg)','체중(KG)') || get('몸무게','weight','체중');
+  const footSize    = gi('발사이즈(mm)','발사이즈') || get('발 사이즈','신발사이즈');
+  const clothesSize = gi('사이즈','옷사이즈','의류사이즈') || get('clothesSize','size');
+  const birthDate   = gi('출생년도','생년월일','출생연도') || get('나이','생년','년생');
+  const gender      = gi('성별') || get('gender');
+  const nationality = gi('국적') || get('nationality') || '한국';
+  const phone       = gi('연락처','전화번호') || get('phone','Tel');
+  const location    = gi('거주지','주소','지역') || get('location');
+  const category    = gi('카테고리') || get('분류');
+  const shootDate   = gi('촬영일') || get('촬영날짜');
+  const status      = gi('진행여부','진행 여부') || get('Status','상태');
+  const fee         = gi('촬영료','페이') || get('Pay','fee');
+  const note        = gi('코멘트','메모','비고','특이사항') || get('Notes','Memo','Comment');
+
+  const bioArr = [
+    height    && `키 ${height}`,
+    weight    && `몸무게 ${weight}`,
+    footSize  && `발 ${footSize}`,
+    birthDate,
+  ].filter(Boolean);
+
+  return {
+    ...basePostData(fullName, username, note, 'model'),
+    type: 'Notion',
+    biography: bioArr.join(' / '),
+    caption: [note, category].filter(Boolean).join(' | '),
+    permalink: username ? `https://www.instagram.com/${username}/` : '',
+    height, weight, footSize, shoeSize: footSize, clothesSize,
+    birthDate, gender, nationality, phone, location,
+    category, shootDate, status, fee,
+  };
+}
+
+// ── 🌐 외주 DB CSV 매핑 ───────────────────────────────
+function mapOutsourceRow(row) {
+  const { get, gi } = cleanRow(row);
+
+  const fullName     = gi('이름') || get('name','Name');
+  const category     = gi('스텝유형') || get('category');
+  const status       = gi('진행유무') || get('status');
+  const contact      = gi('연락') || get('contact','연락처');
+  const rawInsta     = gi('인스타그램','인스타') || get('instagram','SNS');
+  const username     = extractInstagram(rawInsta);
+  const pay          = gi('시간당 페이','페이') || get('pay','fee');
+  const lastShootDate= gi('마지막 촬영일','촬영일') || get('lastShootDate');
+  const note         = gi('코멘트','메모') || get('comment','Comment');
+
+  return {
+    ...basePostData(fullName, username, note, 'outsource'),
+    type: 'Outsource',
+    biography: [category, contact].filter(Boolean).join(' / '),
+    caption: note,
+    permalink: username ? `https://www.instagram.com/${username}/` : '',
+    category, status, contact, pay, lastShootDate,
+    instagram: username,
+  };
+}
+
+// ── 📸 스튜디오 DB CSV 매핑 ──────────────────────────
+function mapStudioRow(row) {
+  const { get, gi } = cleanRow(row);
+
+  const fullName  = gi('이름') || get('name','Name');
+  const studioType= gi('스튜디오유형') || get('type','유형');
+  const address   = gi('주소') || get('address','location');
+  const price     = gi('렌탈료(1h)','렌탈료') || get('price','렌탈','fee');
+  const website   = gi('HOME') || get('website','홈페이지','url');
+  const sns       = gi('SNS') || get('sns','instagram','인스타');
+  const note      = gi('💬코멘트','코멘트','메모') || get('comment','Comment');
+
+  const snsClean = extractInstagram(sns);
+
+  return {
+    ...basePostData(fullName, snsClean || fullName.replace(/\s/g,''), note, 'studio'),
+    type: 'Studio',
+    biography: [studioType, address].filter(Boolean).join(' / '),
+    caption: note,
+    permalink: snsClean ? `https://www.instagram.com/${snsClean}/` : (website || ''),
+    studioType, address, price, website, sns: snsClean,
+    location: address,
+    category: studioType,
   };
 }
 
