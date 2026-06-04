@@ -373,6 +373,39 @@
   #settingsOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 300; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
   #settingsOverlay.open { display: flex; }
 
+  /* ── 직접 등록 폼 모달 ──────────────────────────── */
+  #manualAddModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:500; align-items:center; justify-content:center; backdrop-filter:blur(4px); overflow-y:auto; padding:20px; }
+  #manualAddModal.open { display:flex; }
+  .manual-modal {
+    background:white; border-radius:var(--r-xl); width:100%; max-width:680px;
+    box-shadow:0 24px 60px rgba(0,0,0,.3); max-height:90vh; overflow-y:auto;
+  }
+  .manual-modal-header {
+    padding:18px 24px 14px; border-bottom:1px solid var(--gray-100);
+    display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; background:white; z-index:1;
+  }
+  .manual-modal-body { padding:20px 24px 24px; }
+  .form-section-title { font-size:10px; font-weight:700; color:var(--gray-400); text-transform:uppercase; letter-spacing:.8px; margin:16px 0 10px; }
+  .form-section-title:first-child { margin-top:0; }
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .form-grid.cols-3 { grid-template-columns:1fr 1fr 1fr; }
+  .form-grid.cols-1 { grid-template-columns:1fr; }
+  .form-field { display:flex; flex-direction:column; gap:4px; }
+  .form-field.span-2 { grid-column:span 2; }
+  .form-label { font-size:11px; font-weight:700; color:var(--gray-600); }
+  .form-label .required { color:var(--red); margin-left:2px; }
+  .form-input, .form-select, .form-textarea {
+    padding:8px 10px; border:1.5px solid var(--gray-200); border-radius:var(--r-sm);
+    font-family:inherit; font-size:13px; color:var(--gray-800);
+    background:var(--gray-50); outline:none; transition:border-color .15s, background .15s;
+    width:100%;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus {
+    border-color:var(--red); background:white;
+  }
+  .form-textarea { resize:vertical; min-height:70px; }
+  .form-actions { display:flex; gap:8px; margin-top:20px; padding-top:16px; border-top:1px solid var(--gray-100); }
+
   /* ── 토스트 ──────────────────────────────────────── */
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--gray-900); color: white; padding: 10px 20px; border-radius: 10px; font-size: 13px; font-weight: 600; box-shadow: var(--shadow-md); transition: transform .3s; z-index: 400; white-space: nowrap; }
   .toast.show { transform: translateX(-50%) translateY(0); }
@@ -545,6 +578,19 @@
         <!-- 기존 모델 DB 탭 -->
         <div id="dbGrid" style="display:none">
 
+          <!-- 상단 액션 버튼 -->
+          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+            <button onclick="openManualAddModal()"
+              style="padding:10px 18px;background:var(--red);color:white;border:none;border-radius:var(--r-md);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
+              ＋ 새 모델 직접 등록
+            </button>
+            <button onclick="deleteAllNotionData()"
+              style="padding:10px 14px;background:transparent;color:#dc2626;border:2px solid #fca5a5;border-radius:var(--r-md);font-family:inherit;font-size:11px;font-weight:700;cursor:pointer"
+              onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='transparent'">
+              🚨 내부 DB 데이터 전체 삭제
+            </button>
+          </div>
+
           <!-- CSV 업로드 영역 -->
           <input type="file" id="csvFileInput" accept=".csv" style="display:none"
             onchange="handleCSVFile(this.files[0])">
@@ -559,18 +605,123 @@
           </div>
           <div id="importProgress"></div>
 
-          <!-- 컨트롤 버튼 -->
-          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-            <button onclick="deleteAllNotionData()"
-              style="padding:8px 14px;background:transparent;color:#dc2626;border:2px solid #fca5a5;border-radius:var(--r-md);font-family:inherit;font-size:11px;font-weight:700;cursor:pointer"
-              onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='transparent'">
-              🚨 잘못 올라간 노션 데이터 전체 삭제
-            </button>
-          </div>
-
-          <!-- 동기화된 노션 모델 목록 -->
+          <!-- 내부 DB 모델 목록 -->
           <div id="notionModelsList"></div>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 직접 모델 등록 모달 -->
+<div id="manualAddModal" onclick="if(event.target===this)closeManualAddModal()">
+  <div class="manual-modal">
+    <div class="manual-modal-header">
+      <div style="font-size:16px;font-weight:800">➕ 새 모델 직접 등록</div>
+      <button onclick="closeManualAddModal()" style="width:30px;height:30px;border-radius:50%;border:none;background:var(--gray-100);cursor:pointer;font-size:16px;color:var(--gray-600)">✕</button>
+    </div>
+    <div class="manual-modal-body">
+
+      <!-- 필수 정보 -->
+      <div class="form-section-title">📌 필수 정보</div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="form-label">이름<span class="required">*</span></label>
+          <input class="form-input" id="mf-name" type="text" placeholder="홍길동">
+        </div>
+        <div class="form-field">
+          <label class="form-label">진행 여부</label>
+          <select class="form-select" id="mf-status">
+            <option value="">선택</option>
+            <option value="진행중">✅ 진행중</option>
+            <option value="보류">⏸️ 보류</option>
+            <option value="완료">✔️ 완료</option>
+            <option value="중단">❌ 중단</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 프로필 -->
+      <div class="form-section-title">👤 프로필</div>
+      <div class="form-grid cols-3">
+        <div class="form-field">
+          <label class="form-label">생년월일</label>
+          <input class="form-input" id="mf-birth" type="text" placeholder="예: 2016년생 / 8세">
+        </div>
+        <div class="form-field">
+          <label class="form-label">성별</label>
+          <select class="form-select" id="mf-gender">
+            <option value="">선택</option>
+            <option value="여">여</option>
+            <option value="남">남</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">국적</label>
+          <input class="form-input" id="mf-nationality" type="text" placeholder="한국" value="한국">
+        </div>
+        <div class="form-field">
+          <label class="form-label">키 (cm)</label>
+          <input class="form-input" id="mf-height" type="number" placeholder="120">
+        </div>
+        <div class="form-field">
+          <label class="form-label">체중 (kg)</label>
+          <input class="form-input" id="mf-weight" type="number" placeholder="22">
+        </div>
+        <div class="form-field">
+          <label class="form-label">발사이즈 (mm)</label>
+          <input class="form-input" id="mf-foot" type="number" placeholder="185">
+        </div>
+      </div>
+
+      <!-- 실무 정보 -->
+      <div class="form-section-title">📋 실무 정보</div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="form-label">인스타그램 ID</label>
+          <input class="form-input" id="mf-insta" type="text" placeholder="@username">
+        </div>
+        <div class="form-field">
+          <label class="form-label">연락처</label>
+          <input class="form-input" id="mf-phone" type="tel" placeholder="010-0000-0000">
+        </div>
+        <div class="form-field">
+          <label class="form-label">거주지</label>
+          <input class="form-input" id="mf-location" type="text" placeholder="서울 강남">
+        </div>
+        <div class="form-field">
+          <label class="form-label">카테고리</label>
+          <select class="form-select" id="mf-category">
+            <option value="">선택</option>
+            <option value="키즈">키즈</option>
+            <option value="주니어">주니어</option>
+            <option value="베이비">베이비</option>
+            <option value="혼혈">혼혈</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">촬영일</label>
+          <input class="form-input" id="mf-shootdate" type="date">
+        </div>
+        <div class="form-field">
+          <label class="form-label">촬영료</label>
+          <input class="form-input" id="mf-fee" type="text" placeholder="예: 30만원">
+        </div>
+        <div class="form-field span-2">
+          <label class="form-label">코멘트</label>
+          <textarea class="form-textarea" id="mf-comment" placeholder="실물 인상, 피팅 사이즈, 특이사항 등..."></textarea>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button onclick="saveManualModel()"
+          style="flex:1;padding:12px;background:var(--red);color:white;border:none;border-radius:var(--r-md);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">
+          💾 저장하기
+        </button>
+        <button onclick="closeManualAddModal()"
+          style="padding:12px 20px;background:var(--gray-100);color:var(--gray-600);border:none;border-radius:var(--r-md);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">
+          취소
+        </button>
       </div>
     </div>
   </div>
@@ -767,8 +918,9 @@ function isReadyForFinal(p) {
 }
 
 function updateTabBadges() {
-  const picks  = savedModels.filter(p => !isReadyForFinal(p) && !isNotionData(p)).length;
-  const finals = savedModels.filter(p =>  isReadyForFinal(p) && !isNotionData(p)).length;  const pb = document.getElementById('pick-badge');
+  const picks  = savedModels.filter(p => !isReadyForFinal(p)).length;
+  const finals = savedModels.filter(p =>  isReadyForFinal(p)).length;
+  const pb = document.getElementById('pick-badge');
   const fb = document.getElementById('final-badge');
   if (pb) pb.textContent = picks;
   if (fb) fb.textContent = finals;
@@ -780,13 +932,89 @@ function applyProjectFilter(list) {
   return list.filter(p => (p.project || '') === pf);
 }
 
-// 노션 데이터 판별: source, _source, id prefix 세 가지로 확인
-const isNotionData = p =>
-  p.source === 'notion' || p._source === 'notion' || (p.id && p.id.startsWith('notion_'));
+// 내부 DB 데이터 판별 (notion CSV/API + manual 직접 등록)
+const isNotionData   = p => p.source === 'notion'   || p._source === 'notion'   || (p.id && p.id.startsWith('notion_'));
+const isManualData   = p => p.source === 'manual'   || (p.id && p.id.startsWith('manual_'));
+const isInternalData = p => isNotionData(p) || isManualData(p);
+
+// ── 직접 등록 모달 ────────────────────────────────────
+function openManualAddModal() {
+  // 폼 초기화
+  ['mf-name','mf-status','mf-birth','mf-gender','mf-nationality','mf-height',
+   'mf-weight','mf-foot','mf-insta','mf-phone','mf-location',
+   'mf-category','mf-shootdate','mf-fee','mf-comment'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = el.id === 'mf-nationality' ? '한국' : '';
+  });
+  document.getElementById('manualAddModal').classList.add('open');
+}
+function closeManualAddModal() {
+  document.getElementById('manualAddModal').classList.remove('open');
+}
+
+async function saveManualModel() {
+  const name = document.getElementById('mf-name').value.trim();
+  if (!name) { showToast('⚠️ 이름은 필수 항목이에요'); return; }
+
+  const rawInsta = document.getElementById('mf-insta').value.trim();
+  const username = rawInsta.replace(/^@/,'').trim();
+
+  const height   = document.getElementById('mf-height').value.trim();
+  const weight   = document.getElementById('mf-weight').value.trim();
+  const birth    = document.getElementById('mf-birth').value.trim();
+  const bioArr   = [
+    height && `키 ${height}cm`,
+    weight && `몸무게 ${weight}kg`,
+    birth,
+  ].filter(Boolean);
+
+  const postData = {
+    id:        `manual_${Date.now()}_${Math.random().toString(36).substr(2,5)}`,
+    fullName:  name,
+    username:  username || name.replace(/\s/g,''),
+    biography: bioArr.join(' / '),
+    caption:   document.getElementById('mf-comment').value.trim(),
+    imgUrl:    '',
+    permalink: username ? `https://www.instagram.com/${username}/` : '',
+    likes: 0, comments: 0, followers: null,
+    timestamp: new Date().toISOString(),
+    type: 'Manual', _real: false,
+    source:   'manual',
+    // 추가 필드
+    status:      document.getElementById('mf-status').value,
+    gender:      document.getElementById('mf-gender').value,
+    nationality: document.getElementById('mf-nationality').value.trim(),
+    height:      height,
+    weight:      weight,
+    footSize:    document.getElementById('mf-foot').value.trim(),
+    phone:       document.getElementById('mf-phone').value.trim(),
+    location:    document.getElementById('mf-location').value.trim(),
+    category:    document.getElementById('mf-category').value,
+    shootDate:   document.getElementById('mf-shootdate').value,
+    fee:         document.getElementById('mf-fee').value.trim(),
+    ratings:     { nicole: 0, rachel: 0, stella: 0 },
+  };
+
+  try {
+    const { error } = await db.from('saved_models')
+      .insert({ id: postData.id, post_data: postData });
+    if (error) throw error;
+
+    savedModels.push(postData);
+    savedIds.add(postData.id);
+    updateSavedBadge(); updateTabBadges();
+    renderNotionDBTab();
+    closeManualAddModal();
+    showToast(`✅ ${name} 등록 완료!`);
+  } catch(e) {
+    console.error('저장 실패:', e);
+    showToast('⚠️ 저장에 실패했어요: ' + (e.message || ''));
+  }
+}
 
 function renderPickTab() {
-  // 노션 데이터 완전 제외
-  let picks = savedModels.filter(p => !isReadyForFinal(p) && !isNotionData(p));
+  // 노션·직접등록 데이터 완전 제외, 인스타 검색 저장만 표시
+  let picks = savedModels.filter(p => !isReadyForFinal(p) && !isInternalData(p));
   picks = applyProjectFilter(picks);
   updateTabBadges();
   document.getElementById('pick-list').innerHTML = picks.length
@@ -795,8 +1023,8 @@ function renderPickTab() {
 }
 
 function renderFinalTab() {
-  // 노션 데이터 완전 제외
-  let finals = savedModels.filter(p => isReadyForFinal(p) && !isNotionData(p));
+  // 노션·직접등록 데이터 완전 제외, 인스타 검색 저장만 표시
+  let finals = savedModels.filter(p => isReadyForFinal(p) && !isInternalData(p));
   finals = applyProjectFilter(finals);
   updateTabBadges();
   document.getElementById('final-list').innerHTML = finals.length
@@ -806,32 +1034,50 @@ function renderFinalTab() {
 
 // 기존 모델 DB 탭 — 노션 데이터만 렌더링
 function renderNotionDBTab() {
-  const list = savedModels.filter(isNotionData);
+  const list = savedModels.filter(isInternalData); // 노션 + 직접등록 모두 표시
   const el = document.getElementById('notionModelsList');
   if (!el) return;
-  if (!list.length) {
-    el.innerHTML = `<div class="tab-empty">🗂️ 동기화된 노션 모델이 없어요<br>위 버튼을 눌러 노션 DB를 동기화해 주세요</div>`;
+  const total    = list.length;
+  const manualCnt = list.filter(isManualData).length;
+  const notionCnt = list.filter(isNotionData).length;
+
+  if (!total) {
+    el.innerHTML = `<div class="tab-empty">🗂️ 등록된 모델이 없어요<br>직접 등록하거나 CSV를 업로드해 주세요</div>`;
     return;
   }
-  el.innerHTML = list.map(p => {
+  el.innerHTML = `<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">
+    총 ${total}명 · 직접등록 ${manualCnt}명 · CSV ${notionCnt}명
+  </div>` + list.map(p => {
     const sp = extractChildProfile(p);
-    const badges = [sp.height, sp.weight, sp.birth].filter(Boolean)
+    // 직접등록은 height/weight 필드 우선 사용
+    const heightVal = p.height ? p.height + 'cm' : sp.height;
+    const weightVal = p.weight ? p.weight + 'kg' : sp.weight;
+    const birthVal  = sp.birth || '';
+    const badges = [heightVal, weightVal, birthVal].filter(Boolean)
       .map(v => `<span class="profile-badge">${v}</span>`).join('');
+    const statusBadge = p.status
+      ? `<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0">${p.status}</span>`
+      : '';
     const igLink = p.username && p.username !== '알수없음'
       ? `<a href="https://www.instagram.com/${p.username}/" target="_blank"
            style="font-size:11px;color:var(--red);text-decoration:none">@${p.username}</a>`
       : `<span style="font-size:11px;color:var(--gray-400)">인스타 없음</span>`;
-    // caption에서 URL·노션 링크 제거
     const cleanNote = (p.caption || '').replace(/https?:\/\/\S+/g,'').replace(/Related to\s+\S+/g,'').trim();
+    const sourceDot = isManualData(p)
+      ? `<span style="font-size:9px;color:var(--gray-400);border:1px solid var(--gray-200);border-radius:3px;padding:0 4px">직접등록</span>`
+      : `<span style="font-size:9px;color:var(--gray-400);border:1px solid var(--gray-200);border-radius:3px;padding:0 4px">CSV</span>`;
     return `
     <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:white;border:1px solid var(--gray-200);border-radius:10px;margin-bottom:6px">
       <div style="width:36px;height:36px;border-radius:8px;background:var(--gray-100);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px">
         ${p.imgUrl ? `<img src="${p.imgUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="imgFallback(this)">` : '👤'}
       </div>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:13px">${p.fullName || p.username}</div>
+        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+          <span style="font-weight:700;font-size:13px">${p.fullName || p.username}</span>
+          ${statusBadge}${sourceDot}
+        </div>
         <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:2px">${igLink}${badges}</div>
-        ${cleanNote ? `<div style="font-size:11px;color:var(--gray-500);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cleanNote}</div>` : ''}
+        ${cleanNote ? `<div style="font-size:11px;color:var(--gray-500);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px">${cleanNote}</div>` : ''}
       </div>
       <button onclick="deleteSingleNotionModel('${p.id}')"
         style="width:26px;height:26px;border:none;background:transparent;cursor:pointer;font-size:14px;color:var(--gray-400);flex-shrink:0"
