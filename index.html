@@ -1107,62 +1107,111 @@ function closeModelDetailModal() {
 }
 
 // ── 뷰 모드 렌더링 ────────────────────────────────────
-function renderDetailView(p) {
-  const sp = extractChildProfile(p);
-  const heightVal = p.height ? p.height + 'cm' : sp.height || '—';
-  const weightVal = p.weight ? p.weight + 'kg' : sp.weight || '—';
-  const birthVal  = p.birthDate || p.birthYear || sp.birth || '—';
-  const footVal   = (p.footSize || p.shoeSize) ? (p.footSize || p.shoeSize) + 'mm' : '—';
-  const igUrl     = p.username && p.username !== '알수없음' ? `https://www.instagram.com/${p.username}/` : '';
-  const memoText  = [p.memo || p.comment, p.caption].filter(Boolean).join('\n\n').trim();
+// ── 공통 field 헬퍼 ──────────────────────────────────
+function detailField(pid, label, value, link, fieldKey) {
+  const raw = value && value !== '—' ? value : '';
+  const display = raw
+    ? (link ? `<a href="${link}" target="_blank">${raw}</a>` : raw)
+    : `<span style='color:var(--gray-300)'>—</span>`;
+  const editAttr = fieldKey
+    ? `onclick="inlineEditField(event,'${pid}','${fieldKey}','${String(raw).replace(/'/g,"\\'")}')"
+       style="cursor:pointer" title="클릭하여 수정"`
+    : '';
+  return `<div class="detail-field" ${editAttr}><div class="detail-field-label">${label}${fieldKey?' ✎':''}</div><div class="detail-field-value">${display}</div></div>`;
+}
 
-  // fieldKey 있으면 인라인 편집 가능, 없으면 읽기 전용
-  const field = (label, value, link, fieldKey) => {
-    const raw     = value && value !== '—' ? value : '';
-    const display = raw
-      ? (link ? `<a href="${link}" target="_blank">${raw}</a>` : raw)
-      : '<span style=\'color:var(--gray-300)\'>—</span>';
-    const editAttr = fieldKey
-      ? `onclick="inlineEditField(event,'${p.id}','${fieldKey}','${String(raw).replace(/'/g,"\'")}')"
-         style="cursor:pointer" title="클릭하여 수정"`
-      : '';
-    return `<div class="detail-field" ${editAttr}><div class="detail-field-label">${label}${fieldKey ? ' ✎' : ''}</div><div class="detail-field-value">${display}</div></div>`;
-  };
+// ── 옷사이즈 드롭다운 ─────────────────────────────────
+const CLOTHES_SIZES = ['110호','120호','130호','140호','150호','160호'];
+function clothesSizeDropdown(p) {
+  const cur = p.clothesSize || '';
+  const opts = ['', ...CLOTHES_SIZES].map(s =>
+    `<option value="${s}" ${s===cur?'selected':''}>${s || '사이즈 선택'}</option>`).join('');
+  return `<select class="status-select-inline"
+    style="font-size:10px;background:#eff6ff;color:#1d4ed8;border:1.5px solid #bfdbfe"
+    onchange="updateClothesSize('${p.id}',this.value)"
+    onclick="event.stopPropagation()">${opts}</select>`;
+}
 
-  // 갤러리
+async function updateClothesSize(id, size) {
+  const model = savedModels.find(m => m.id === id);
+  if (!model) return;
+  model.clothesSize = size;
+  await db.from('saved_models').update({ post_data: { ...model } }).eq('id', id);
+  renderInternalDBTab(currentDbType);
+  showToast(size ? `✅ ${size} 저장됐어요` : '사이즈 해제됐어요');
+}
+
+// ── 갤러리 HTML 빌더 ──────────────────────────────────
+function galleryHTML(p) {
   const images = Array.isArray(p.images) ? p.images : [];
-  const galleryHTML = `
-    <div class="detail-section">
-      <div class="detail-section-title" style="display:flex;justify-content:space-between;align-items:center">
-        📸 사진 갤러리
-        <button onclick="document.getElementById('photoFileInput').click()"
-          style="font-size:11px;font-weight:600;padding:3px 10px;border:1.5px solid var(--gray-200);border-radius:6px;background:white;cursor:pointer;color:var(--gray-600)">
-          + 사진 추가
-        </button>
+  return `<div class="detail-section">
+    <div class="detail-section-title" style="display:flex;justify-content:space-between;align-items:center">
+      📸 사진 갤러리
+      <button onclick="document.getElementById('photoFileInput').click()"
+        style="font-size:11px;font-weight:600;padding:3px 10px;border:1.5px solid var(--gray-200);border-radius:6px;background:white;cursor:pointer;color:var(--gray-600)">
+        + 사진 추가
+      </button>
+    </div>
+    <div class="photo-gallery">
+      ${images.map((url, i) => `
+        <div class="photo-thumb">
+          <img src="${url}" alt="사진" onclick="window.open('${url}','_blank')">
+          <button class="del-photo" onclick="event.stopPropagation();deleteModelPhoto('${p.id}',${i})">✕</button>
+        </div>`).join('')}
+      <div class="photo-upload-btn" onclick="document.getElementById('photoFileInput').click()">
+        <span style="font-size:20px">+</span><span>사진 추가</span>
       </div>
-      <div class="photo-gallery">
-        ${images.map((url, i) => `
-          <div class="photo-thumb">
-            <img src="${url}" alt="사진" onclick="window.open('${url}','_blank')">
-            <button class="del-photo" onclick="event.stopPropagation();deleteModelPhoto('${p.id}',${i})" title="삭제">✕</button>
-          </div>`).join('')}
-        <div class="photo-upload-btn" onclick="document.getElementById('photoFileInput').click()">
-          <span style="font-size:20px">+</span>
-          <span>사진 추가</span>
-        </div>
-      </div>
-    </div>`;
+    </div>
+  </div>`;
+}
+
+// ── 공통 모달 하단 버튼 ───────────────────────────────
+function modalFooter(igUrl) {
+  return `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--gray-100);display:flex;gap:8px">
+    ${igUrl ? `<a href="${igUrl}" target="_blank"
+      style="flex:1;padding:10px;background:var(--red);color:white;border-radius:var(--r-md);text-decoration:none;font-weight:700;font-size:13px;text-align:center">
+      📸 인스타그램 보기</a>` : ''}
+    <button onclick="closeModelDetailModal()"
+      style="padding:10px 16px;background:var(--gray-100);color:var(--gray-600);border:none;border-radius:var(--r-md);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">
+      닫기
+    </button>
+  </div>`;
+}
+
+// ── db_type별 상세 모달 렌더링 ────────────────────────
+function renderDetailView(p) {
+  const dbType = p.db_type || 'model';
+  const images = Array.isArray(p.images) ? p.images : [];
+  const avatar = images[0] || p.imgUrl
+    ? `<img src="${images[0]||p.imgUrl}" onerror="imgFallback(this)">` : '👤';
+  const f = (label, val, link, key) => detailField(p.id, label, val||'—', link, key);
+
+  if (dbType === 'outsource') {
+    renderOutsourceDetail(p, f, avatar);
+  } else if (dbType === 'studio') {
+    renderStudioDetail(p, f, avatar);
+  } else {
+    renderModelDetail(p, f, avatar, images);
+  }
+}
+
+function renderModelDetail(p, f, avatar, images) {
+  const sp       = extractChildProfile(p);
+  const heightVal= p.height  ? p.height  + 'cm' : sp.height || '—';
+  const weightVal= p.weight  ? p.weight  + 'kg' : sp.weight || '—';
+  const birthVal = p.birthDate || p.birthYear || sp.birth || '—';
+  const footVal  = (p.footSize||p.shoeSize) ? (p.footSize||p.shoeSize)+'mm' : '—';
+  const igUrl    = p.username && p.username!=='알수없음' ? `https://www.instagram.com/${p.username}/` : '';
+  const memoText = [p.memo||p.comment, p.caption].filter(Boolean).join('\n\n').trim();
 
   document.getElementById('detailModalBody').innerHTML = `
     <div class="detail-profile-top">
-      <div class="detail-avatar">
-        ${(images[0] || p.imgUrl) ? `<img src="${images[0] || p.imgUrl}" onerror="imgFallback(this)">` : '👤'}
-      </div>
+      <div class="detail-avatar">${avatar}</div>
       <div class="detail-name-block">
         <div class="detail-name">${p.fullName || p.username || '이름 없음'}</div>
         <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           ${statusBadgeHTML(p.id, p.status || '미정')}
-          ${p.category ? `<span style="font-size:12px;color:var(--gray-500)">${p.category}</span>` : ''}
+          ${clothesSizeDropdown(p)}
         </div>
       </div>
     </div>
@@ -1170,51 +1219,92 @@ function renderDetailView(p) {
     <div class="detail-section">
       <div class="detail-section-title">👤 기본 정보</div>
       <div class="detail-grid cols-3">
-        ${field('생년월일', birthVal, null, 'birthDate')}
-        ${field('성별', p.gender || '—', null, 'gender')}
-        ${field('국적', p.nationality || '한국', null, 'nationality')}
-        ${p.db_type === 'model' || !p.db_type ? field('옷사이즈', p.clothesSize || '—', null, 'clothesSize') : ''}
+        ${f('생년월일', birthVal, null, 'birthDate')}
+        ${f('성별', p.gender||'—', null, 'gender')}
+        ${f('국적', p.nationality||'한국', null, 'nationality')}
       </div>
     </div>
 
     <div class="detail-section">
       <div class="detail-section-title">📏 신체 스펙</div>
       <div class="detail-grid cols-3">
-        ${field('키', heightVal, null, 'height')}
-        ${field('체중', weightVal, null, 'weight')}
-        ${field('발사이즈', footVal, null, 'footSize')}
+        ${f('키', heightVal, null, 'height')}
+        ${f('체중', weightVal, null, 'weight')}
+        ${f('발사이즈', footVal, null, 'footSize')}
       </div>
     </div>
 
     <div class="detail-section">
       <div class="detail-section-title">📋 실무 정보</div>
       <div class="detail-grid">
-        ${field('연락처', p.phone || '—', null, 'phone')}
-        ${field('거주지', p.location || '—', null, 'location')}
-        ${field('촬영일', p.shootDate || '—', null, 'shootDate')}
-        ${field('촬영료', p.fee || '—', null, 'fee')}
-        ${field('카테고리', p.category || '—', null, 'category')}
-        ${field('인스타그램', igUrl ? '@' + p.username : '—', igUrl, 'username')}
+        ${f('연락처', p.phone||'—', null, 'phone')}
+        ${f('거주지', p.location||'—', null, 'location')}
+        ${f('촬영일', p.shootDate||'—', null, 'shootDate')}
+        ${f('촬영료', p.fee||'—', null, 'fee')}
+        ${f('카테고리', p.category||'—', null, 'category')}
+        ${f('인스타그램', igUrl ? '@'+p.username : '—', igUrl, 'username')}
       </div>
     </div>
+    ${memoText ? `<div class="detail-section"><div class="detail-section-title">📝 메모</div><div class="detail-memo">${memoText}</div></div>` : ''}
+    ${galleryHTML(p)}
+    ${modalFooter(igUrl)}`;
+}
 
-    ${memoText ? `
+function renderOutsourceDetail(p, f, avatar) {
+  const igUrl = p.username && p.username!=='알수없음' ? `https://www.instagram.com/${p.username}/` : '';
+  const memoText = (p.memo||p.comment||'').trim();
+  document.getElementById('detailModalBody').innerHTML = `
+    <div class="detail-profile-top">
+      <div class="detail-avatar">${avatar}</div>
+      <div class="detail-name-block">
+        <div class="detail-name">${p.fullName||'이름 없음'}</div>
+        <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          ${statusBadgeHTML(p.id, p.status||'미정')}
+          ${p.category ? `<span style="font-size:12px;font-weight:700;color:var(--gray-600)">${p.category}</span>` : ''}
+        </div>
+      </div>
+    </div>
     <div class="detail-section">
-      <div class="detail-section-title">📝 메모</div>
-      <div class="detail-memo">${memoText}</div>
-    </div>` : ''}
+      <div class="detail-section-title">📋 외주 스텝 정보</div>
+      <div class="detail-grid">
+        ${f('이름', p.fullName||'—', null, 'fullName')}
+        ${f('스텝유형', p.category||'—', null, 'category')}
+        ${f('연락', p.contact||p.phone||'—', null, 'contact')}
+        ${f('시간당 페이', p.pay||p.fee||'—', null, 'pay')}
+        ${f('마지막 촬영일', p.lastShootDate||p.shootDate||'—', null, 'lastShootDate')}
+        ${f('인스타그램', igUrl ? '@'+p.username : '—', igUrl, 'username')}
+      </div>
+    </div>
+    ${memoText ? `<div class="detail-section"><div class="detail-section-title">💬 코멘트</div><div class="detail-memo">${memoText}</div></div>` : ''}
+    ${modalFooter(igUrl)}`;
+}
 
-    ${galleryHTML}
-
-    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--gray-100);display:flex;gap:8px">
-      ${igUrl ? `<a href="${igUrl}" target="_blank"
-        style="flex:1;padding:10px;background:var(--red);color:white;border-radius:var(--r-md);text-decoration:none;font-weight:700;font-size:13px;text-align:center">
-        📸 인스타그램 보기</a>` : ''}
-      <button onclick="closeModelDetailModal()"
-        style="padding:10px 16px;background:var(--gray-100);color:var(--gray-600);border:none;border-radius:var(--r-md);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">
-        닫기
-      </button>
-    </div>`;
+function renderStudioDetail(p, f, avatar) {
+  const websiteUrl = p.website || '';
+  const snsUrl = p.sns ? `https://www.instagram.com/${p.sns}/` : '';
+  const memoText = (p.memo||p.comment||'').trim();
+  document.getElementById('detailModalBody').innerHTML = `
+    <div class="detail-profile-top">
+      <div class="detail-avatar">${avatar}</div>
+      <div class="detail-name-block">
+        <div class="detail-name">${p.fullName||'이름 없음'}</div>
+        ${p.studioType ? `<div style="margin-top:4px;font-size:13px;color:var(--gray-500)">${p.studioType}</div>` : ''}
+      </div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">📋 스튜디오 정보</div>
+      <div class="detail-grid">
+        ${f('이름', p.fullName||'—', null, 'fullName')}
+        ${f('스튜디오유형', p.studioType||'—', null, 'studioType')}
+        ${f('주소', p.address||p.location||'—', null, 'address')}
+        ${f('렌탈료(1h)', p.price||p.fee||'—', null, 'price')}
+        ${f('HOME', websiteUrl ? '홈페이지 →' : '—', websiteUrl||null)}
+        ${f('SNS', snsUrl ? '@'+p.sns : '—', snsUrl||null, 'sns')}
+      </div>
+    </div>
+    ${memoText ? `<div class="detail-section"><div class="detail-section-title">💬 코멘트</div><div class="detail-memo">${memoText}</div></div>` : ''}
+    ${galleryHTML(p)}
+    ${modalFooter('')}`;
 }
 
 
@@ -1427,76 +1517,143 @@ function renderFinalTab() {
     : `<div class="tab-empty">⭐ 아직 최종 선발된 모델이 없어요<br>${MIN_VOTERS}명 이상 투표 + 평균 3점 이상이면 이동해요</div>`;
 }
 
-// 기존 모델 DB 탭 — 노션 데이터만 렌더링
-// 모든 renderNotionDBTab 호출 → renderInternalDBTab으로 리다이렉트
+// ── DB 탭 렌더링 ─────────────────────────────────────
 function renderNotionDBTab() { renderInternalDBTab(currentDbType || 'model'); }
 
+let outsourceFilter = ''; // 외주 스텝유형 필터
+const OUTSOURCE_TYPES = ['전체보기','디렉터','스타일리스트','포토그래퍼','헤어메이크업'];
+
+function setOutsourceFilter(type) {
+  outsourceFilter = type === '전체보기' ? '' : type;
+  // 탭 버튼 활성화 갱신
+  document.querySelectorAll('.outsource-filter-btn').forEach(btn => {
+    const isActive = (btn.dataset.type === type) || (!type && btn.dataset.type === '전체보기');
+    btn.classList.toggle('active', isActive);
+  });
+  renderInternalDBTab('outsource');
+}
+
 function renderInternalDBTab(dbType) {
-  // DB 탭 상단 타이틀 업데이트
   const titleEl = document.getElementById('dbTabTitle');
   if (titleEl) titleEl.textContent = DB_TYPE_LABEL[dbType] || '모델 DB';
 
-  // db_type 기준 필터 (하위 호환: db_type 없는 기존 데이터는 'model'로 간주)
-  const list = savedModels.filter(p => {
+  let list = savedModels.filter(p => {
     if (!isInternalData(p)) return false;
-    const t = p.db_type || 'model';
-    return t === dbType;
+    return (p.db_type || 'model') === dbType;
   });
+
+  // 외주 DB: 스텝유형 필터 적용
+  if (dbType === 'outsource' && outsourceFilter) {
+    list = list.filter(p => (p.category || '') === outsourceFilter);
+  }
+
   const el = document.getElementById('notionModelsList');
   if (!el) return;
-  const total    = list.length;
-  const manualCnt = list.filter(isManualData).length;
-  const notionCnt = list.filter(isNotionData).length;
 
-  if (!total) {
-    el.innerHTML = `<div class="tab-empty">🗂️ 등록된 모델이 없어요<br>직접 등록하거나 CSV를 업로드해 주세요</div>`;
+  // ── 외주 DB: 스텝유형 필터 탭 표시 ──────────────────
+  const outsourceFilterBar = dbType === 'outsource' ? `
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px">
+      ${OUTSOURCE_TYPES.map(t => `
+        <button class="outsource-filter-btn ${(!outsourceFilter && t==='전체보기')||(outsourceFilter===t)?'active':''}"
+          data-type="${t}"
+          onclick="setOutsourceFilter('${t}')"
+          style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--gray-200);
+            background:${(!outsourceFilter&&t==='전체보기')||(outsourceFilter===t)?'var(--red)':'white'};
+            color:${(!outsourceFilter&&t==='전체보기')||(outsourceFilter===t)?'white':'var(--gray-600)'};
+            font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s">
+          ${t}
+        </button>`).join('')}
+    </div>` : '';
+
+  const total = savedModels.filter(p => isInternalData(p) && (p.db_type||'model')===dbType).length;
+
+  if (!list.length) {
+    el.innerHTML = outsourceFilterBar + `<div class="tab-empty">데이터가 없어요<br>직접 등록하거나 CSV를 업로드해 주세요</div>`;
     return;
   }
-  el.innerHTML = `<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">
-    총 ${total}명 · 직접등록 ${manualCnt}명 · CSV ${notionCnt}명
-  </div>` + list.map(p => {
-    const sp = extractChildProfile(p);
-    const heightVal     = p.height   ? p.height   + 'cm' : sp.height;
-    const weightVal     = p.weight   ? p.weight   + 'kg' : sp.weight;
-    const footSizeVal   = (p.footSize || p.shoeSize) ? (p.footSize || p.shoeSize) + 'mm' : '';
-    const birthVal      = sp.birth || '';
-    // 스펙 배지: 키 · 체중 · 발사이즈 · 나이
-    const badges = [heightVal, weightVal, footSizeVal, birthVal].filter(Boolean)
-      .map(v => `<span class="profile-badge">${v}</span>`).join('');
-    // 옷사이즈 배지 (있을 때만)
-    const clothesBadge = p.clothesSize
-      ? `<span class="profile-badge" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe">${p.clothesSize}</span>`
-      : '';
-    const statusBadge = statusBadgeHTML(p.id, p.status || '미정', '10px');
-    const igLink = p.username && p.username !== '알수없음'
-      ? `<a href="https://www.instagram.com/${p.username}/" target="_blank"
-           style="font-size:11px;color:var(--red);text-decoration:none">@${p.username}</a>`
-      : `<span style="font-size:11px;color:var(--gray-400)">인스타 없음</span>`;
-    const cleanNote = (p.caption || '').replace(/https?:\/\/\S+/g,'').replace(/Related to\s+\S+/g,'').trim();
-    const sourceDot = isManualData(p)
-      ? `<span style="font-size:9px;color:var(--gray-400);border:1px solid var(--gray-200);border-radius:3px;padding:0 4px">직접등록</span>`
-      : `<span style="font-size:9px;color:var(--gray-400);border:1px solid var(--gray-200);border-radius:3px;padding:0 4px">CSV</span>`;
-    return `
-    <div class="db-model-card" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:white;border:1px solid var(--gray-200);border-radius:10px;margin-bottom:6px">
-      <!-- 카드 본체 클릭 → 상세 팝업 -->
-      <div onclick="openModelDetailModal('${p.id}')" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
-        <div style="width:40px;height:40px;border-radius:8px;background:var(--gray-100);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden">
-          ${p.imgUrl ? `<img src="${p.imgUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="imgFallback(this)">` : '👤'}
-        </div>
-        <div style="min-width:0">
-          <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
-            <span style="font-weight:700;font-size:13px">${p.fullName || p.username}</span>
-            ${statusBadge}${clothesBadge}${sourceDot}
-          </div>
-          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:2px">${igLink}${badges}</div>
-          ${cleanNote ? `<div style="font-size:11px;color:var(--gray-500);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:380px">${cleanNote}</div>` : ''}
-        </div>
+
+  el.innerHTML = outsourceFilterBar
+    + `<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">${list.length}명 표시 / 전체 ${total}명</div>`
+    + list.map(p => renderDbCard(p, dbType)).join('');
+}
+
+// ── db_type별 카드 렌더링 라우터 ─────────────────────
+function renderDbCard(p, dbType) {
+  if (dbType === 'outsource') return renderOutsourceCard(p);
+  if (dbType === 'studio')    return renderStudioCard(p);
+  return renderModelCard_list(p);
+}
+
+function cardShell(p, inner) {
+  return `<div class="db-model-card" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:white;border:1px solid var(--gray-200);border-radius:10px;margin-bottom:6px">
+    <div onclick="openModelDetailModal('${p.id}')" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer">
+      <div style="width:40px;height:40px;border-radius:8px;background:var(--gray-100);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden">
+        ${p.imgUrl ? `<img src="${p.imgUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="imgFallback(this)">` : '👤'}
       </div>
-      <button onclick="event.stopPropagation();deleteSingleNotionModel('${p.id}')"
-        style="width:26px;height:26px;border:none;background:transparent;cursor:pointer;font-size:14px;color:var(--gray-400);flex-shrink:0"
-        title="삭제">🗑️</button>
-    </div>`;
-  }).join('');
+      <div style="min-width:0;flex:1">${inner}</div>
+    </div>
+    <button onclick="event.stopPropagation();deleteSingleNotionModel('${p.id}')"
+      style="width:26px;height:26px;border:none;background:transparent;cursor:pointer;font-size:14px;color:var(--gray-400);flex-shrink:0">🗑️</button>
+  </div>`;
+}
+
+// 🗂️ 모델 DB 카드
+function renderModelCard_list(p) {
+  const sp         = extractChildProfile(p);
+  const heightVal  = p.height  ? p.height  + 'cm' : sp.height;
+  const weightVal  = p.weight  ? p.weight  + 'kg' : sp.weight;
+  const footVal    = (p.footSize||p.shoeSize) ? (p.footSize||p.shoeSize)+'mm' : '';
+  const birthVal   = sp.birth || '';
+  const specBadges = [heightVal, weightVal, footVal, birthVal].filter(Boolean)
+    .map(v => `<span class="profile-badge">${v}</span>`).join('');
+  const clothesBadge = p.clothesSize
+    ? `<span class="profile-badge" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe">${p.clothesSize}</span>` : '';
+  const igLink = p.username && p.username!=='알수없음'
+    ? `<a href="https://www.instagram.com/${p.username}/" target="_blank" style="font-size:11px;color:var(--red);text-decoration:none">@${p.username}</a>`
+    : `<span style="font-size:11px;color:var(--gray-400)">인스타 없음</span>`;
+  const sourceDot = `<span style="font-size:9px;color:var(--gray-400);border:1px solid var(--gray-200);border-radius:3px;padding:0 4px">${isManualData(p)?'직접등록':'CSV'}</span>`;
+  const note = (p.caption||'').replace(/https?:\/\/\S+/g,'').replace(/Related to\s+\S+/g,'').trim();
+
+  return cardShell(p, `
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+      <span style="font-weight:700;font-size:13px">${p.fullName||p.username}</span>
+      ${statusBadgeHTML(p.id, p.status||'미정','10px')}${clothesBadge}${sourceDot}
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:2px">${igLink}${specBadges}</div>
+    ${note ? `<div style="font-size:11px;color:var(--gray-500);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:380px">${note}</div>` : ''}`);
+}
+
+// 🌐 외주 DB 카드
+function renderOutsourceCard(p) {
+  const igLink = p.username && p.username!=='알수없음'
+    ? `<a href="https://www.instagram.com/${p.username}/" target="_blank" style="font-size:11px;color:var(--red);text-decoration:none">@${p.username}</a>` : '';
+  return cardShell(p, `
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+      <span style="font-weight:700;font-size:13px">${p.fullName||'이름 없음'}</span>
+      ${statusBadgeHTML(p.id, p.status||'미정','10px')}
+      ${p.category ? `<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0">${p.category}</span>` : ''}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px;font-size:11px;color:var(--gray-500)">
+      ${p.contact||p.phone ? `📞 ${p.contact||p.phone}` : ''}
+      ${p.pay||p.fee ? `💰 ${p.pay||p.fee}` : ''}
+      ${igLink}
+    </div>`);
+}
+
+// 📸 스튜디오 DB 카드
+function renderStudioCard(p) {
+  const websiteLink = p.website
+    ? `<a href="${p.website}" target="_blank" style="font-size:11px;color:var(--red);text-decoration:none">홈페이지 →</a>` : '';
+  return cardShell(p, `
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+      <span style="font-weight:700;font-size:13px">${p.fullName||'이름 없음'}</span>
+      ${p.studioType ? `<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:#faf5ff;color:#6b21a8;border:1px solid #e9d5ff">${p.studioType}</span>` : ''}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px;font-size:11px;color:var(--gray-500)">
+      ${p.address||p.location ? `📍 ${p.address||p.location}` : ''}
+      ${p.price||p.fee ? `💰 ${p.price||p.fee}` : ''}
+      ${websiteLink}
+    </div>`);
 }
 
 // ── 아이 프로필 정보 추출 (캡션 + 프로필 소개글 통합 검색) ──
