@@ -411,6 +411,33 @@
   .csv-collapse { overflow:hidden; transition:max-height .3s ease; max-height:0; }
   .csv-collapse.open { max-height:300px; }
 
+  /* ── 진행여부 상태 배지 색상 ────────────────────── */
+  .status-badge { display:inline-flex;align-items:center;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:opacity .15s; }
+  .status-badge:hover { opacity:.8; }
+  .status-진행중   { background:#d1fae5;color:#065f46; }
+  .status-제작중   { background:#dbeafe;color:#1e40af; }
+  .status-보류     { background:#fef3c7;color:#92400e; }
+  .status-진행종료 { background:#f3f4f6;color:#374151; }
+  .status-졸업     { background:#ede9fe;color:#5b21b6; }
+  .status-미정     { background:#f9fafb;color:#9ca3af;border:1px solid #e5e7eb; }
+  .status-select-inline { font-size:11px;font-weight:700;padding:2px 6px;border-radius:20px;border:1.5px solid var(--red);background:white;cursor:pointer;font-family:inherit;outline:none; }
+
+  /* ── 사진 갤러리 ─────────────────────────────────── */
+  .photo-gallery { display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px; }
+  .photo-thumb { aspect-ratio:1;border-radius:8px;overflow:hidden;background:var(--gray-100);position:relative;cursor:pointer; }
+  .photo-thumb img { width:100%;height:100%;object-fit:cover;transition:transform .2s; }
+  .photo-thumb:hover img { transform:scale(1.05); }
+  .photo-thumb .del-photo { position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.6);color:white;border:none;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s; }
+  .photo-thumb:hover .del-photo { opacity:1; }
+  .photo-upload-btn { aspect-ratio:1;border-radius:8px;border:2px dashed var(--gray-300);background:var(--gray-50);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--gray-400);font-size:11px;font-weight:600;transition:all .15s; }
+  .photo-upload-btn:hover { border-color:var(--red);color:var(--red);background:var(--red-50); }
+
+  /* ── 편집 모드 ───────────────────────────────────── */
+  .edit-input { padding:6px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-family:inherit;font-size:12px;color:var(--gray-800);background:white;outline:none;width:100%;transition:border-color .15s; }
+  .edit-input:focus { border-color:var(--red); }
+  .edit-textarea { padding:6px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-family:inherit;font-size:12px;color:var(--gray-800);background:white;outline:none;width:100%;resize:vertical;min-height:60px;transition:border-color .15s; }
+  .edit-textarea:focus { border-color:var(--red); }
+
   /* ── 직접 등록 폼 모달 ──────────────────────────── */
   #manualAddModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:500; align-items:center; justify-content:center; backdrop-filter:blur(4px); overflow-y:auto; padding:20px; }
   #manualAddModal.open { display:flex; }
@@ -661,8 +688,17 @@
   <div class="detail-modal">
     <div class="detail-modal-header">
       <div style="font-size:15px;font-weight:800" id="detailModalTitle">모델 상세 정보</div>
-      <button onclick="closeModelDetailModal()" style="width:30px;height:30px;border-radius:50%;border:none;background:var(--gray-100);cursor:pointer;font-size:16px;color:var(--gray-600)">✕</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button id="editModeBtn" onclick="toggleDetailEditMode()"
+          style="padding:5px 12px;border:1.5px solid var(--gray-200);border-radius:8px;background:white;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-600)">
+          ✏️ 정보 수정
+        </button>
+        <button onclick="closeModelDetailModal()" style="width:30px;height:30px;border-radius:50%;border:none;background:var(--gray-100);cursor:pointer;font-size:16px;color:var(--gray-600)">✕</button>
+      </div>
     </div>
+    <!-- 사진 업로드 input (숨김) -->
+    <input type="file" id="photoFileInput" accept="image/*" multiple style="display:none"
+      onchange="handlePhotoUpload(this.files)">
     <div class="detail-modal-body" id="detailModalBody"></div>
   </div>
 </div>
@@ -971,6 +1007,46 @@ function isReadyForFinal(p) {
   return getVoterCount(p) === MIN_VOTERS && getAverageRating(p) >= RATING_THRESHOLD;
 }
 
+// ── 진행여부 상수 ─────────────────────────────────────
+const STATUS_OPTIONS = ['진행중','제작중','보류','진행종료','졸업','미정'];
+const STATUS_CLASS   = {
+  '진행중':'status-진행중', '제작중':'status-제작중', '보류':'status-보류',
+  '진행종료':'status-진행종료', '졸업':'status-졸업', '미정':'status-미정',
+};
+function statusBadgeHTML(id, status, size='11px') {
+  const cls   = STATUS_CLASS[status] || 'status-미정';
+  const label = status || '미정';
+  const opts  = STATUS_OPTIONS.map(s =>
+    `<option value="${s}" ${s===status?'selected':''}>${s}</option>`).join('');
+  return `<select class="status-select-inline ${cls}"
+    style="font-size:${size}"
+    onchange="event.stopPropagation();updateStatus('${id}',this.value)"
+    onclick="event.stopPropagation()">
+    ${opts}
+  </select>`;
+}
+
+// ── 진행여부 Supabase 업데이트 ──────────────────────
+async function updateStatus(id, newStatus) {
+  const model = savedModels.find(p => p.id === id);
+  if (!model) return;
+  model.status = newStatus;
+  const { error } = await db.from('saved_models').update({ post_data: { ...model } }).eq('id', id);
+  if (error) { showToast('⚠️ 상태 저장 실패'); return; }
+  // 카드 목록 리렌더 (현재 탭)
+  renderNotionDBTab();
+  showToast(`✅ ${newStatus} 으로 변경됐어요`);
+  // 모달이 열려있으면 상태 부분만 업데이트
+  if (currentDetailModelId === id) {
+    const badge = document.getElementById('detail-status-select');
+    // 모달 내 select는 이미 변경됨, 색상 클래스만 갱신
+  }
+}
+
+// 현재 열린 상세 모달 ID + 편집모드 상태
+let currentDetailModelId = null;
+let detailEditMode = false;
+
 function updateTabBadges() {
   const picks  = savedModels.filter(p => !isReadyForFinal(p)).length;
   const finals = savedModels.filter(p =>  isReadyForFinal(p)).length;
@@ -1001,16 +1077,31 @@ function toggleCSVZone(btn) {
 
 // ── 모델 상세 팝업 ────────────────────────────────────
 function openModelDetailModal(id) {
+  currentDetailModelId = id;
+  detailEditMode = false;
   const p = savedModels.find(m => m.id === id);
   if (!p) return;
-
   document.getElementById('detailModalTitle').textContent = p.fullName || p.username || '모델 정보';
+  document.getElementById('editModeBtn').textContent = '✏️ 정보 수정';
+  renderDetailView(p);
+  document.getElementById('modelDetailModal').classList.add('open');
+}
 
+function closeModelDetailModal() {
+  document.getElementById('modelDetailModal').classList.remove('open');
+  currentDetailModelId = null;
+  detailEditMode = false;
+}
+
+// ── 뷰 모드 렌더링 ────────────────────────────────────
+function renderDetailView(p) {
   const sp = extractChildProfile(p);
-  const heightVal = p.height  ? p.height  + 'cm' : sp.height  || '—';
-  const weightVal = p.weight  ? p.weight  + 'kg' : sp.weight  || '—';
-  const birthVal  = p.birthDate || sp.birth || '—';
-  const footVal   = (p.footSize || p.shoeSize || p.foot) ? (p.footSize || p.shoeSize || p.foot) + 'mm' : '—';
+  const heightVal = p.height ? p.height + 'cm' : sp.height || '—';
+  const weightVal = p.weight ? p.weight + 'kg' : sp.weight || '—';
+  const birthVal  = p.birthDate || p.birthYear || sp.birth || '—';
+  const footVal   = (p.footSize || p.shoeSize) ? (p.footSize || p.shoeSize) + 'mm' : '—';
+  const igUrl     = p.username && p.username !== '알수없음' ? `https://www.instagram.com/${p.username}/` : '';
+  const memoText  = [p.memo || p.comment, p.caption].filter(Boolean).join('\n\n').trim();
 
   const field = (label, value, link) => {
     const display = value && value !== '—'
@@ -1019,22 +1110,41 @@ function openModelDetailModal(id) {
     return `<div class="detail-field"><div class="detail-field-label">${label}</div><div class="detail-field-value">${display}</div></div>`;
   };
 
-  const statusColor = { '진행중':'#166534', '보류':'#92400e', '완료':'#1e40af', '중단':'#9f1239' };
-  const statusStyle = p.status ? `background:${statusColor[p.status]||'#374151'}1a;color:${statusColor[p.status]||'#374151'};padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700` : '';
-
-  const igUrl = p.username && p.username !== '알수없음' ? `https://www.instagram.com/${p.username}/` : '';
+  // 갤러리
+  const images = Array.isArray(p.images) ? p.images : [];
+  const galleryHTML = `
+    <div class="detail-section">
+      <div class="detail-section-title" style="display:flex;justify-content:space-between;align-items:center">
+        📸 사진 갤러리
+        <button onclick="document.getElementById('photoFileInput').click()"
+          style="font-size:11px;font-weight:600;padding:3px 10px;border:1.5px solid var(--gray-200);border-radius:6px;background:white;cursor:pointer;color:var(--gray-600)">
+          + 사진 추가
+        </button>
+      </div>
+      <div class="photo-gallery">
+        ${images.map((url, i) => `
+          <div class="photo-thumb">
+            <img src="${url}" alt="사진" onclick="window.open('${url}','_blank')">
+            <button class="del-photo" onclick="event.stopPropagation();deleteModelPhoto('${p.id}',${i})" title="삭제">✕</button>
+          </div>`).join('')}
+        <div class="photo-upload-btn" onclick="document.getElementById('photoFileInput').click()">
+          <span style="font-size:20px">+</span>
+          <span>사진 추가</span>
+        </div>
+      </div>
+    </div>`;
 
   document.getElementById('detailModalBody').innerHTML = `
     <div class="detail-profile-top">
       <div class="detail-avatar">
-        ${p.imgUrl
-          ? `<img src="${p.imgUrl}" onerror="imgFallback(this)">`
-          : '👤'}
+        ${(images[0] || p.imgUrl) ? `<img src="${images[0] || p.imgUrl}" onerror="imgFallback(this)">` : '👤'}
       </div>
       <div class="detail-name-block">
         <div class="detail-name">${p.fullName || p.username || '이름 없음'}</div>
-        ${p.status ? `<span style="${statusStyle}">${p.status}</span>` : ''}
-        ${p.category ? `<span style="margin-left:4px;font-size:12px;color:var(--gray-500)">${p.category}</span>` : ''}
+        <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          ${statusBadgeHTML(p.id, p.status || '미정')}
+          ${p.category ? `<span style="font-size:12px;color:var(--gray-500)">${p.category}</span>` : ''}
+        </div>
       </div>
     </div>
 
@@ -1068,11 +1178,13 @@ function openModelDetailModal(id) {
       </div>
     </div>
 
-    ${(p.caption || p.memo) ? `
+    ${memoText ? `
     <div class="detail-section">
       <div class="detail-section-title">📝 메모</div>
-      <div class="detail-memo">${(p.caption || '') + (p.memo ? '\n\n📌 촬영메모: ' + p.memo : '')}</div>
+      <div class="detail-memo">${memoText}</div>
     </div>` : ''}
+
+    ${galleryHTML}
 
     <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--gray-100);display:flex;gap:8px">
       ${igUrl ? `<a href="${igUrl}" target="_blank"
@@ -1083,12 +1195,156 @@ function openModelDetailModal(id) {
         닫기
       </button>
     </div>`;
-
-  document.getElementById('modelDetailModal').classList.add('open');
 }
 
-function closeModelDetailModal() {
-  document.getElementById('modelDetailModal').classList.remove('open');
+// ── 편집 모드 토글 ─────────────────────────────────
+function toggleDetailEditMode() {
+  const p = savedModels.find(m => m.id === currentDetailModelId);
+  if (!p) return;
+  detailEditMode = !detailEditMode;
+  document.getElementById('editModeBtn').textContent = detailEditMode ? '✕ 취소' : '✏️ 정보 수정';
+  if (detailEditMode) renderDetailEditForm(p);
+  else renderDetailView(p);
+}
+
+function renderDetailEditForm(p) {
+  const ef = (label, key, type='text', placeholder='') =>
+    `<div class="form-field">
+      <label class="form-label">${label}</label>
+      <input class="edit-input" id="ef-${key}" type="${type}" value="${(p[key]||'').toString().replace(/"/g,'&quot;')}" placeholder="${placeholder}">
+    </div>`;
+
+  const statusOpts = STATUS_OPTIONS.map(s =>
+    `<option value="${s}" ${s===(p.status||'')?'selected':''}>${s}</option>`).join('');
+
+  document.getElementById('detailModalBody').innerHTML = `
+    <div class="form-section-title">📌 기본 정보</div>
+    <div class="form-grid">
+      ${ef('이름','fullName','text','홍길동')}
+      <div class="form-field">
+        <label class="form-label">진행여부</label>
+        <select class="edit-input" id="ef-status">${statusOpts}</select>
+      </div>
+      ${ef('생년월일','birthDate','text','2016년생')}
+      <div class="form-field">
+        <label class="form-label">성별</label>
+        <select class="edit-input" id="ef-gender">
+          <option value="">선택</option>
+          ${['여','남'].map(g=>`<option ${p.gender===g?'selected':''}>${g}</option>`).join('')}
+        </select>
+      </div>
+      ${ef('국적','nationality','text','한국')}
+      ${ef('카테고리','category','text','키즈')}
+    </div>
+    <div class="form-section-title" style="margin-top:14px">📏 신체 스펙</div>
+    <div class="form-grid cols-3">
+      ${ef('키 (cm)','height','number')}
+      ${ef('체중 (kg)','weight','number')}
+      ${ef('발사이즈 (mm)','footSize','number')}
+    </div>
+    <div class="form-section-title" style="margin-top:14px">📋 실무 정보</div>
+    <div class="form-grid">
+      ${ef('인스타그램 ID','username','text','username')}
+      ${ef('연락처','phone','tel','010-0000-0000')}
+      ${ef('거주지','location','text','서울')}
+      ${ef('촬영일','shootDate','date')}
+      ${ef('촬영료','fee','text','30만원')}
+    </div>
+    <div class="form-section-title" style="margin-top:14px">📝 메모</div>
+    <textarea class="edit-textarea" id="ef-memo" placeholder="코멘트, 실물 인상, 촬영 메모...">${p.memo || p.comment || ''}</textarea>
+
+    <div style="display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--gray-100)">
+      <button onclick="saveDetailEdit()"
+        style="flex:1;padding:11px;background:var(--red);color:white;border:none;border-radius:var(--r-md);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">
+        💾 저장
+      </button>
+      <button onclick="toggleDetailEditMode()"
+        style="padding:11px 16px;background:var(--gray-100);color:var(--gray-600);border:none;border-radius:var(--r-md);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">
+        취소
+      </button>
+    </div>`;
+}
+
+async function saveDetailEdit() {
+  const model = savedModels.find(m => m.id === currentDetailModelId);
+  if (!model) return;
+
+  const g = id => (document.getElementById(id)?.value || '').trim();
+
+  Object.assign(model, {
+    fullName:  g('ef-fullName'),
+    status:    g('ef-status'),
+    birthDate: g('ef-birthDate'),
+    gender:    g('ef-gender'),
+    nationality: g('ef-nationality'),
+    category:  g('ef-category'),
+    height:    g('ef-height'),
+    weight:    g('ef-weight'),
+    footSize:  g('ef-footSize'),
+    shoeSize:  g('ef-footSize'),
+    username:  g('ef-username'),
+    phone:     g('ef-phone'),
+    location:  g('ef-location'),
+    shootDate: g('ef-shootDate'),
+    fee:       g('ef-fee'),
+    memo:      g('ef-memo'),
+  });
+  // biography 갱신
+  const bioArr = [
+    model.height && `키 ${model.height}`,
+    model.weight && `몸무게 ${model.weight}`,
+    model.birthDate,
+  ].filter(Boolean);
+  model.biography = bioArr.join(' / ');
+  model.permalink = model.username ? `https://www.instagram.com/${model.username}/` : '';
+
+  try {
+    const { error } = await db.from('saved_models').update({ post_data: { ...model } }).eq('id', model.id);
+    if (error) throw error;
+    document.getElementById('detailModalTitle').textContent = model.fullName || model.username || '모델 정보';
+    detailEditMode = false;
+    document.getElementById('editModeBtn').textContent = '✏️ 정보 수정';
+    renderDetailView(model);
+    renderNotionDBTab();
+    showToast('✅ 정보가 수정됐어요!');
+  } catch(e) {
+    showToast('⚠️ 저장 실패: ' + (e.message || ''));
+  }
+}
+
+// ── 사진 업로드 (Supabase Storage) ───────────────────
+async function handlePhotoUpload(files) {
+  if (!files || !files.length) return;
+  const model = savedModels.find(m => m.id === currentDetailModelId);
+  if (!model) return;
+
+  showToast('⏳ 사진 업로드 중...');
+  if (!Array.isArray(model.images)) model.images = [];
+
+  for (const file of Array.from(files)) {
+    const ext  = file.name.split('.').pop();
+    const path = `${model.id}/${Date.now()}_${Math.random().toString(36).substr(2,5)}.${ext}`;
+    const { error: upErr } = await db.storage.from('model-photos').upload(path, file, { upsert: true });
+    if (upErr) { console.error('업로드 실패:', upErr); continue; }
+    const { data } = db.storage.from('model-photos').getPublicUrl(path);
+    if (data?.publicUrl) model.images.push(data.publicUrl);
+  }
+
+  const { error } = await db.from('saved_models').update({ post_data: { ...model } }).eq('id', model.id);
+  if (error) { showToast('⚠️ DB 저장 실패'); return; }
+
+  document.getElementById('photoFileInput').value = '';
+  renderDetailView(model);
+  showToast(`✅ 사진 ${Array.from(files).length}장 업로드 완료!`);
+}
+
+async function deleteModelPhoto(id, index) {
+  const model = savedModels.find(m => m.id === id);
+  if (!model || !model.images) return;
+  model.images.splice(index, 1);
+  await db.from('saved_models').update({ post_data: { ...model } }).eq('id', id);
+  renderDetailView(model);
+  showToast('사진을 삭제했어요');
 }
 
 // ── 직접 등록 모달 ────────────────────────────────────
@@ -1209,9 +1465,7 @@ function renderNotionDBTab() {
     const birthVal  = sp.birth || '';
     const badges = [heightVal, weightVal, birthVal].filter(Boolean)
       .map(v => `<span class="profile-badge">${v}</span>`).join('');
-    const statusBadge = p.status
-      ? `<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0">${p.status}</span>`
-      : '';
+    const statusBadge = statusBadgeHTML(p.id, p.status || '미정', '10px');
     const igLink = p.username && p.username !== '알수없음'
       ? `<a href="https://www.instagram.com/${p.username}/" target="_blank"
            style="font-size:11px;color:var(--red);text-decoration:none">@${p.username}</a>`
