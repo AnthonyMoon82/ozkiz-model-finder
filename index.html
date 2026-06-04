@@ -373,6 +373,44 @@
   #settingsOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 300; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
   #settingsOverlay.open { display: flex; }
 
+  /* ── 모델 상세 팝업 ─────────────────────────────── */
+  #modelDetailModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:500; align-items:center; justify-content:center; backdrop-filter:blur(4px); padding:20px; overflow-y:auto; }
+  #modelDetailModal.open { display:flex; }
+  .detail-modal { background:white; border-radius:var(--r-xl); width:100%; max-width:560px; box-shadow:0 24px 60px rgba(0,0,0,.3); max-height:90vh; overflow-y:auto; }
+  .detail-modal-header { padding:18px 22px 14px; border-bottom:1px solid var(--gray-100); display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; background:white; z-index:1; }
+  .detail-modal-body { padding:20px 22px 24px; }
+  .detail-profile-top { display:flex; gap:14px; align-items:flex-start; margin-bottom:18px; }
+  .detail-avatar { width:72px; height:72px; border-radius:12px; background:var(--gray-100); flex-shrink:0; overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:32px; }
+  .detail-avatar img { width:100%; height:100%; object-fit:cover; }
+  .detail-name-block { flex:1; }
+  .detail-name { font-size:20px; font-weight:800; color:var(--gray-900); }
+  .detail-section { margin-top:16px; }
+  .detail-section-title { font-size:10px; font-weight:700; color:var(--gray-400); text-transform:uppercase; letter-spacing:.8px; margin-bottom:8px; }
+  .detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .detail-grid.cols-3 { grid-template-columns:1fr 1fr 1fr; }
+  .detail-field { background:var(--gray-50); border-radius:8px; padding:8px 10px; }
+  .detail-field-label { font-size:10px; font-weight:700; color:var(--gray-400); margin-bottom:2px; }
+  .detail-field-value { font-size:13px; font-weight:600; color:var(--gray-800); word-break:break-word; }
+  .detail-field-value a { color:var(--red); text-decoration:none; }
+  .detail-field-value a:hover { text-decoration:underline; }
+  .detail-memo { background:var(--gray-50); border-radius:8px; padding:10px 12px; font-size:13px; color:var(--gray-700); line-height:1.6; white-space:pre-wrap; }
+
+  /* DB 카드 hover */
+  .db-model-card { cursor:pointer; transition:background .15s; }
+  .db-model-card:hover { background:var(--gray-50) !important; }
+
+  /* CSV 접기/펼치기 */
+  .csv-toggle-btn {
+    display:flex; align-items:center; gap:6px;
+    padding:7px 14px; background:var(--gray-50);
+    border:1.5px solid var(--gray-200); border-radius:var(--r-sm);
+    font-family:inherit; font-size:12px; font-weight:600;
+    color:var(--gray-600); cursor:pointer; transition:all .15s;
+  }
+  .csv-toggle-btn:hover { border-color:var(--red); color:var(--red); background:var(--red-50); }
+  .csv-collapse { overflow:hidden; transition:max-height .3s ease; max-height:0; }
+  .csv-collapse.open { max-height:300px; }
+
   /* ── 직접 등록 폼 모달 ──────────────────────────── */
   #manualAddModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:500; align-items:center; justify-content:center; backdrop-filter:blur(4px); overflow-y:auto; padding:20px; }
   #manualAddModal.open { display:flex; }
@@ -591,25 +629,41 @@
             </button>
           </div>
 
-          <!-- CSV 업로드 영역 -->
+          <!-- CSV 업로드 (접기/펼치기) -->
           <input type="file" id="csvFileInput" accept=".csv" style="display:none"
             onchange="handleCSVFile(this.files[0])">
-          <div class="db-drop-zone" id="dbDropZone"
-            onclick="document.getElementById('csvFileInput').click()"
-            ondragover="event.preventDefault();this.classList.add('drag-over')"
-            ondragleave="this.classList.remove('drag-over')"
-            ondrop="event.preventDefault();this.classList.remove('drag-over');handleCSVFile(event.dataTransfer.files[0])">
-            <div class="dz-icon">📂</div>
-            <div class="dz-title">노션 CSV 파일을 여기에 드래그하거나 클릭해서 업로드</div>
-            <div class="dz-sub">노션 DB에서 내보낸 .csv 파일을 불러와 저장해요</div>
+          <button class="csv-toggle-btn" onclick="toggleCSVZone(this)">
+            <span>📂</span> 노션 CSV 파일 업로드하기 <span id="csvChevron">▾</span>
+          </button>
+          <div class="csv-collapse" id="csvCollapse">
+            <div class="db-drop-zone" id="dbDropZone" style="margin-top:8px"
+              onclick="document.getElementById('csvFileInput').click()"
+              ondragover="event.preventDefault();this.classList.add('drag-over')"
+              ondragleave="this.classList.remove('drag-over')"
+              ondrop="event.preventDefault();this.classList.remove('drag-over');handleCSVFile(event.dataTransfer.files[0])">
+              <div class="dz-icon">📂</div>
+              <div class="dz-title">CSV 파일을 여기에 드래그하거나 클릭</div>
+              <div class="dz-sub">노션 DB에서 내보낸 .csv 파일을 불러와 저장해요</div>
+            </div>
+            <div id="importProgress"></div>
           </div>
-          <div id="importProgress"></div>
 
           <!-- 내부 DB 모델 목록 -->
           <div id="notionModelsList"></div>
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- 모델 상세 팝업 모달 -->
+<div id="modelDetailModal" onclick="if(event.target===this)closeModelDetailModal()">
+  <div class="detail-modal">
+    <div class="detail-modal-header">
+      <div style="font-size:15px;font-weight:800" id="detailModalTitle">모델 상세 정보</div>
+      <button onclick="closeModelDetailModal()" style="width:30px;height:30px;border-radius:50%;border:none;background:var(--gray-100);cursor:pointer;font-size:16px;color:var(--gray-600)">✕</button>
+    </div>
+    <div class="detail-modal-body" id="detailModalBody"></div>
   </div>
 </div>
 
@@ -937,6 +991,106 @@ const isNotionData   = p => p.source === 'notion'   || p._source === 'notion'   
 const isManualData   = p => p.source === 'manual'   || (p.id && p.id.startsWith('manual_'));
 const isInternalData = p => isNotionData(p) || isManualData(p);
 
+// ── CSV 접기/펼치기 ───────────────────────────────────
+function toggleCSVZone(btn) {
+  const zone = document.getElementById('csvCollapse');
+  const chevron = document.getElementById('csvChevron');
+  const isOpen = zone.classList.toggle('open');
+  chevron.textContent = isOpen ? '▴' : '▾';
+}
+
+// ── 모델 상세 팝업 ────────────────────────────────────
+function openModelDetailModal(id) {
+  const p = savedModels.find(m => m.id === id);
+  if (!p) return;
+
+  document.getElementById('detailModalTitle').textContent = p.fullName || p.username || '모델 정보';
+
+  const sp = extractChildProfile(p);
+  const heightVal = p.height  ? p.height  + 'cm' : sp.height  || '—';
+  const weightVal = p.weight  ? p.weight  + 'kg' : sp.weight  || '—';
+  const birthVal  = p.birthDate || sp.birth || '—';
+  const footVal   = p.footSize  ? p.footSize + 'mm' : '—';
+
+  const field = (label, value, link) => {
+    const display = value && value !== '—'
+      ? (link ? `<a href="${link}" target="_blank">${value}</a>` : value)
+      : '<span style="color:var(--gray-300)">—</span>';
+    return `<div class="detail-field"><div class="detail-field-label">${label}</div><div class="detail-field-value">${display}</div></div>`;
+  };
+
+  const statusColor = { '진행중':'#166534', '보류':'#92400e', '완료':'#1e40af', '중단':'#9f1239' };
+  const statusStyle = p.status ? `background:${statusColor[p.status]||'#374151'}1a;color:${statusColor[p.status]||'#374151'};padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700` : '';
+
+  const igUrl = p.username && p.username !== '알수없음' ? `https://www.instagram.com/${p.username}/` : '';
+
+  document.getElementById('detailModalBody').innerHTML = `
+    <div class="detail-profile-top">
+      <div class="detail-avatar">
+        ${p.imgUrl
+          ? `<img src="${p.imgUrl}" onerror="imgFallback(this)">`
+          : '👤'}
+      </div>
+      <div class="detail-name-block">
+        <div class="detail-name">${p.fullName || p.username || '이름 없음'}</div>
+        ${p.status ? `<span style="${statusStyle}">${p.status}</span>` : ''}
+        ${p.category ? `<span style="margin-left:4px;font-size:12px;color:var(--gray-500)">${p.category}</span>` : ''}
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">👤 기본 정보</div>
+      <div class="detail-grid cols-3">
+        ${field('생년월일', birthVal)}
+        ${field('성별', p.gender || '—')}
+        ${field('국적', p.nationality || '한국')}
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">📏 신체 스펙</div>
+      <div class="detail-grid cols-3">
+        ${field('키', heightVal)}
+        ${field('체중', weightVal)}
+        ${field('발사이즈', footVal)}
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">📋 실무 정보</div>
+      <div class="detail-grid">
+        ${field('연락처', p.phone || '—')}
+        ${field('거주지', p.location || '—')}
+        ${field('촬영일', p.shootDate || '—')}
+        ${field('촬영료', p.fee || '—')}
+        ${field('카테고리', p.category || '—')}
+        ${field('인스타그램', igUrl ? '@' + p.username : '—', igUrl)}
+      </div>
+    </div>
+
+    ${(p.caption || p.memo) ? `
+    <div class="detail-section">
+      <div class="detail-section-title">📝 메모</div>
+      <div class="detail-memo">${(p.caption || '') + (p.memo ? '\n\n📌 촬영메모: ' + p.memo : '')}</div>
+    </div>` : ''}
+
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--gray-100);display:flex;gap:8px">
+      ${igUrl ? `<a href="${igUrl}" target="_blank"
+        style="flex:1;padding:10px;background:var(--red);color:white;border-radius:var(--r-md);text-decoration:none;font-weight:700;font-size:13px;text-align:center">
+        📸 인스타그램 보기</a>` : ''}
+      <button onclick="closeModelDetailModal()"
+        style="padding:10px 16px;background:var(--gray-100);color:var(--gray-600);border:none;border-radius:var(--r-md);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">
+        닫기
+      </button>
+    </div>`;
+
+  document.getElementById('modelDetailModal').classList.add('open');
+}
+
+function closeModelDetailModal() {
+  document.getElementById('modelDetailModal').classList.remove('open');
+}
+
 // ── 직접 등록 모달 ────────────────────────────────────
 function openManualAddModal() {
   // 폼 초기화
@@ -1067,19 +1221,22 @@ function renderNotionDBTab() {
       ? `<span style="font-size:9px;color:var(--gray-400);border:1px solid var(--gray-200);border-radius:3px;padding:0 4px">직접등록</span>`
       : `<span style="font-size:9px;color:var(--gray-400);border:1px solid var(--gray-200);border-radius:3px;padding:0 4px">CSV</span>`;
     return `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:white;border:1px solid var(--gray-200);border-radius:10px;margin-bottom:6px">
-      <div style="width:36px;height:36px;border-radius:8px;background:var(--gray-100);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px">
-        ${p.imgUrl ? `<img src="${p.imgUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="imgFallback(this)">` : '👤'}
-      </div>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
-          <span style="font-weight:700;font-size:13px">${p.fullName || p.username}</span>
-          ${statusBadge}${sourceDot}
+    <div class="db-model-card" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:white;border:1px solid var(--gray-200);border-radius:10px;margin-bottom:6px">
+      <!-- 카드 본체 클릭 → 상세 팝업 -->
+      <div onclick="openModelDetailModal('${p.id}')" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+        <div style="width:40px;height:40px;border-radius:8px;background:var(--gray-100);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden">
+          ${p.imgUrl ? `<img src="${p.imgUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="imgFallback(this)">` : '👤'}
         </div>
-        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:2px">${igLink}${badges}</div>
-        ${cleanNote ? `<div style="font-size:11px;color:var(--gray-500);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px">${cleanNote}</div>` : ''}
+        <div style="min-width:0">
+          <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+            <span style="font-weight:700;font-size:13px">${p.fullName || p.username}</span>
+            ${statusBadge}${sourceDot}
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:2px">${igLink}${badges}</div>
+          ${cleanNote ? `<div style="font-size:11px;color:var(--gray-500);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:380px">${cleanNote}</div>` : ''}
+        </div>
       </div>
-      <button onclick="deleteSingleNotionModel('${p.id}')"
+      <button onclick="event.stopPropagation();deleteSingleNotionModel('${p.id}')"
         style="width:26px;height:26px;border:none;background:transparent;cursor:pointer;font-size:14px;color:var(--gray-400);flex-shrink:0"
         title="삭제">🗑️</button>
     </div>`;
