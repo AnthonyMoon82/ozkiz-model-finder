@@ -1010,7 +1010,7 @@ function openModelDetailModal(id) {
   const heightVal = p.height  ? p.height  + 'cm' : sp.height  || '—';
   const weightVal = p.weight  ? p.weight  + 'kg' : sp.weight  || '—';
   const birthVal  = p.birthDate || sp.birth || '—';
-  const footVal   = p.footSize  ? p.footSize + 'mm' : '—';
+  const footVal   = (p.footSize || p.foot) ? (p.footSize || p.foot) + 'mm' : '—';
 
   const field = (label, value, link) => {
     const display = value && value !== '—'
@@ -1530,34 +1530,66 @@ function mapRowToPostData(row) {
     clean[k] || clean[k.toLowerCase()] || ''
   ).find(v => v) || '';
 
+  // ── 기본 정보 ─────────────────────────────────────
   const fullName = get('이름','Name','name','모델명','성명');
   const rawInsta = get('인스타ID','인스타','인스타그램','Instagram','@ID','username','SNS');
   const username = rawInsta.replace(/^@/,'').replace(/https?:\/\/.*instagram\.com\//,'').replace(/\//g,'').trim();
+
+  // ── 신체 스펙 ─────────────────────────────────────
   const height   = get('키','Height','height','신장');
   const weight   = get('몸무게','Weight','weight','체중');
-  const age      = get('나이','출생','Age','생년','년생','출생연도');
-  const note     = get('특징','Notes','메모','비고','특이사항','Memo','코멘트','특이사항');
-  const category = get('카테고리','Category','분류','타입');
+  const footSize = get('발사이즈','발 사이즈','FootSize','발','shoeSize','신발사이즈');
 
+  // ── 나이/출생 ─────────────────────────────────────
+  const birthDate = get('생년월일','출생','나이','Age','생년','년생','출생연도','Birth','birthday');
+
+  // ── 인적사항 ─────────────────────────────────────
+  const gender      = get('성별','Gender','gender');
+  const nationality = get('국적','Nationality','nationality') || '한국';
+
+  // ── 실무 정보 ─────────────────────────────────────
+  const phone     = get('연락처','전화번호','Phone','phone','핸드폰','Tel','tel');
+  const location  = get('거주지','주소','Address','location','지역','거주');
+  const category  = get('카테고리','Category','분류','타입','type');
+  const shootDate = get('촬영일','촬영날짜','Shoot','shoot_date','촬영');
+  const fee       = get('촬영료','페이','Pay','fee','금액','단가');
+  const status    = get('진행여부','진행','상태','Status','status');
+  const note      = get('특징','Notes','메모','비고','특이사항','Memo','코멘트','Comment','comment');
+
+  // ── biography: 기존 정규식 추출기와 호환 ───────────
   const bioArr = [
-    height && `키 ${height}`,
-    weight && `몸무게 ${weight}`,
-    age,
+    height   && `키 ${height}`,
+    weight   && `몸무게 ${weight}`,
+    birthDate,
   ].filter(Boolean);
 
   return {
     id:        `notion_${Date.now()}_${Math.random().toString(36).substr(2,5)}`,
     username:  username || fullName.replace(/\s/g,'') || '알수없음',
     fullName,
-    biography: bioArr.join(' / '),
-    caption:   [note, category].filter(Boolean).join(' | '),
-    imgUrl:    '',
-    permalink: username ? `https://www.instagram.com/${username}/` : '',
+    biography:   bioArr.join(' / '),
+    caption:     [note, category].filter(Boolean).join(' | '),
+    imgUrl:      '',
+    permalink:   username ? `https://www.instagram.com/${username}/` : '',
     likes: 0, comments: 0, followers: null,
     timestamp: '', type: 'Notion', _real: false,
-    source:    'notion',   // 탭 필터링용
+    source:    'notion',
     _source:   'notion',
-    ratings:   { nicole: 0, rachel: 0, stella: 0 },
+    // ── 상세 필드 (상세 팝업에서 사용) ───────────────
+    height,
+    weight,
+    footSize,
+    birthDate,
+    gender,
+    nationality,
+    phone,
+    location,
+    category,
+    shootDate,
+    fee,
+    status,
+    memo:    note,
+    ratings: { nicole: 0, rachel: 0, stella: 0 },
   };
 }
 
