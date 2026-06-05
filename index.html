@@ -438,6 +438,17 @@
   .edit-textarea { padding:6px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-family:inherit;font-size:12px;color:var(--gray-800);background:white;outline:none;width:100%;resize:vertical;min-height:60px;transition:border-color .15s; }
   .edit-textarea:focus { border-color:var(--red); }
 
+  /* ── 컨셉 멀티 칩 ───────────────────────────────── */
+  .concept-chips { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+  .concept-chip {
+    padding:3px 10px; border-radius:16px; font-size:11px; font-weight:600;
+    cursor:pointer; border:1.5px solid var(--gray-200);
+    background:white; color:var(--gray-500);
+    font-family:inherit; transition:all .15s;
+  }
+  .concept-chip:hover { border-color:#c2410c; color:#c2410c; }
+  .concept-chip.active { background:#fff7ed; color:#c2410c; border-color:#fed7aa; font-weight:700; }
+
   /* ── 직접 등록 폼 모달 ──────────────────────────── */
   #manualAddModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:500; align-items:center; justify-content:center; backdrop-filter:blur(4px); overflow-y:auto; padding:20px; }
   #manualAddModal.open { display:flex; }
@@ -1163,6 +1174,48 @@ function setModelSizeFilter(size) {
   renderInternalDBTab('model');
 }
 
+// ── 컨셉 배열 파싱 헬퍼 ──────────────────────────────
+function parseConcepts(val) {
+  if (Array.isArray(val)) return val;
+  if (!val) return [];
+  return String(val).split(',').map(s => s.trim()).filter(Boolean);
+}
+
+// ── 컨셉 멀티 칩 HTML 생성 ────────────────────────────
+function conceptChipsHTML(pid, conceptVal) {
+  const selected = parseConcepts(conceptVal);
+  const chips = STUDIO_CONCEPTS.map(c => {
+    const isOn = selected.includes(c);
+    return `<button class="concept-chip ${isOn ? 'active' : ''}"
+      data-concept="${c}"
+      onclick="event.stopPropagation();toggleConcept('${pid}','${c}')">
+      ${c}
+    </button>`;
+  }).join('');
+  return `<div class="concept-chips">${chips}</div>`;
+}
+
+// ── 컨셉 토글 (다중 선택 → 배열 저장) ────────────────
+async function toggleConcept(id, concept) {
+  const model = savedModels.find(m => m.id === id);
+  if (!model) return;
+
+  let arr = parseConcepts(model.concept);
+  const idx = arr.indexOf(concept);
+  if (idx >= 0) arr.splice(idx, 1);
+  else arr.push(concept);
+
+  model.concept = arr;
+
+  // 즉시 칩 UI 반영 (DB 응답 전)
+  document.querySelectorAll(`.concept-chip[data-concept="${concept}"]`).forEach(el =>
+    el.classList.toggle('active', arr.includes(concept)));
+
+  try {
+    await db.from('saved_models').update({ post_data: { ...model } }).eq('id', id);
+  } catch(e) { console.error('컨셉 저장 실패:', e); }
+}
+
 async function updateClothesSize(id, size) {
   const model = savedModels.find(m => m.id === id);
   if (!model) return;
@@ -1322,7 +1375,7 @@ function renderStudioDetail(p, f, avatar) {
         <div class="detail-name">${p.fullName||'이름 없음'}</div>
         <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           ${quickDropdown(p.id, 'studioType', STUDIO_TYPES, p.studioType||'', 'background:#faf5ff;color:#6b21a8;border:1.5px solid #e9d5ff')}
-          ${quickDropdown(p.id, 'concept',    STUDIO_CONCEPTS, p.concept||'', 'background:#fff7ed;color:#c2410c;border:1.5px solid #fed7aa')}
+          <!-- 컨셉은 멀티 칩으로 별도 섹션에 표시 -->
         </div>
       </div>
     </div>
@@ -1334,8 +1387,11 @@ function renderStudioDetail(p, f, avatar) {
         ${f('렌탈료(1h)', p.price||p.fee||'—', null, 'price')}
         ${f('HOME', websiteUrl ? '홈페이지 →' : '—', websiteUrl||null)}
         ${f('SNS', snsUrl ? '@'+p.sns : '—', snsUrl||null, 'sns')}
-        ${f('컨셉(분위기)', p.concept||'—', null, 'concept')}
       </div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">🎨 컨셉 (분위기) — 여러 개 선택 가능</div>
+      ${conceptChipsHTML(p.id, p.concept)}
     </div>
     ${memoText ? `<div class="detail-section"><div class="detail-section-title">💬 코멘트</div><div class="detail-memo">${memoText}</div></div>` : ''}
     ${galleryHTML(p)}
@@ -1425,26 +1481,51 @@ async function saveInlineField(id, key, value) {
 async function handlePhotoUpload(files) {
   if (!files || !files.length) return;
   const model = savedModels.find(m => m.id === currentDetailModelId);
-  if (!model) return;
+  if (!model) { showToast('⚠️ 업로드할 모델을 찾을 수 없어요'); return; }
 
-  showToast('⏳ 사진 업로드 중...');
+  // images 배열 보장
   if (!Array.isArray(model.images)) model.images = [];
 
+  let uploadedCount = 0;
+  let errorCount    = 0;
+
   for (const file of Array.from(files)) {
-    const ext  = file.name.split('.').pop();
-    const path = `${model.id}/${Date.now()}_${Math.random().toString(36).substr(2,5)}.${ext}`;
-    const { error: upErr } = await db.storage.from('model-photos').upload(path, file, { upsert: true });
-    if (upErr) { console.error('업로드 실패:', upErr); continue; }
+    const ext  = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const safeName = `${Date.now()}_${Math.random().toString(36).substr(2,5)}.${ext}`;
+    const path = `${model.id}/${safeName}`;
+
+    showToast(`⏳ 사진 업로드 중... (${uploadedCount + 1}/${files.length})`);
+
+    const { error: upErr } = await db.storage
+      .from('model-photos')
+      .upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
+
+    if (upErr) {
+      console.error('업로드 실패:', upErr);
+      const isRLS = upErr.message?.toLowerCase().includes('policy')
+                 || upErr.message?.toLowerCase().includes('permission')
+                 || String(upErr.statusCode) === '403';
+      showToast(isRLS
+        ? '⚠️ 스토리지 권한 오류(RLS)입니다. Supabase Storage 정책을 확인해주세요.'
+        : `⚠️ 업로드 실패: ${upErr.message || '알 수 없는 오류'}`);
+      errorCount++;
+      continue;
+    }
+
     const { data } = db.storage.from('model-photos').getPublicUrl(path);
-    if (data?.publicUrl) model.images.push(data.publicUrl);
+    if (data?.publicUrl) {
+      model.images.push(data.publicUrl);
+      uploadedCount++;
+    }
   }
 
   const { error } = await db.from('saved_models').update({ post_data: { ...model } }).eq('id', model.id);
-  if (error) { showToast('⚠️ DB 저장 실패'); return; }
+  if (error) { showToast('⚠️ DB 저장 실패: ' + (error.message||'')); return; }
 
   document.getElementById('photoFileInput').value = '';
   renderDetailView(model);
-  showToast(`✅ 사진 ${Array.from(files).length}장 업로드 완료!`);
+  if (uploadedCount > 0) showToast(`✅ 사진 ${uploadedCount}장 업로드 완료!${errorCount > 0 ? ` (실패 ${errorCount}장)` : ''}`);
+  else if (errorCount > 0) showToast(`⚠️ 모든 사진 업로드에 실패했어요 (${errorCount}장)`);
 }
 
 async function deleteModelPhoto(id, index) {
@@ -1692,6 +1773,9 @@ function renderOutsourceCard(p) {
 function renderStudioCard(p) {
   const websiteLink = p.website
     ? `<a href="${p.website}" target="_blank" style="font-size:11px;color:var(--red);text-decoration:none">홈페이지 →</a>` : '';
+  const concepts = parseConcepts(p.concept);
+  const conceptBadges = concepts.slice(0,3).map(c =>
+    `<span class="concept-chip active" style="font-size:9px;padding:1px 6px">${c}</span>`).join('');
   return cardShell(p, `
     <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
       <span style="font-weight:700;font-size:13px">${p.fullName||'이름 없음'}</span>
@@ -1701,7 +1785,8 @@ function renderStudioCard(p) {
       ${p.address||p.location ? `📍 ${p.address||p.location}` : ''}
       ${p.price||p.fee ? `💰 ${p.price||p.fee}` : ''}
       ${websiteLink}
-    </div>`);
+    </div>
+    ${conceptBadges ? `<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">${conceptBadges}</div>` : ''}`);
 }
 
 // ── 아이 프로필 정보 추출 (캡션 + 프로필 소개글 통합 검색) ──
@@ -2099,7 +2184,8 @@ function mapStudioRow(row) {
   const price     = gi('렌탈료(1h)','렌탈료') || get('price','렌탈','fee');
   const website   = gi('HOME') || get('website','홈페이지','url');
   const sns       = gi('SNS') || get('sns','instagram','인스타');
-  const concept   = gi('분위기','컨셉','Concept') || get('concept');   // 컨셉/분위기 매핑
+  const conceptRaw = gi('분위기','컨셉','Concept') || get('concept');
+  const concept    = conceptRaw ? conceptRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
   const note      = gi('💬코멘트','코멘트','메모') || get('comment','Comment');
 
   const snsClean = extractInstagram(sns);
