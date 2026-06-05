@@ -1121,7 +1121,10 @@ function detailField(pid, label, value, link, fieldKey) {
 }
 
 // ── 옷사이즈 드롭다운 ─────────────────────────────────
-const CLOTHES_SIZES = ['110호','120호','130호','140호','150호','160호'];
+const CLOTHES_SIZES   = ['100호','110호','120호','130호','140호','150호','160호'];
+const OUTSOURCE_STEP_TYPES = ['디렉팅','스타일리스트','포토그래퍼','H&M'];
+const STUDIO_TYPES    = ['렌탈스튜디오','호리존스튜디오','자연광스튜디오','독채스튜디오','컨셉스튜디오','로케이션(야외)','기타'];
+const STUDIO_CONCEPTS = ['가정집','빈티지','유럽풍','모던','숲속/정원','한옥','학교/교실','병원','사무실','식당/카페','상점/마트','옥상/루프탑','바다/해변','체육관','수영장','호리존','기타'];
 function clothesSizeDropdown(p) {
   const cur = p.clothesSize || '';
   const opts = ['', ...CLOTHES_SIZES].map(s =>
@@ -1130,6 +1133,34 @@ function clothesSizeDropdown(p) {
     style="font-size:10px;background:#eff6ff;color:#1d4ed8;border:1.5px solid #bfdbfe"
     onchange="updateClothesSize('${p.id}',this.value)"
     onclick="event.stopPropagation()">${opts}</select>`;
+}
+
+// 공통 퀵드롭다운 헬퍼 (헤더 영역 인라인 셀렉트)
+function quickDropdown(id, fieldKey, options, currentVal, style='') {
+  const opts = ['', ...options].map(o =>
+    `<option value="${o}" ${o===currentVal?'selected':''}>${o||'선택'}</option>`).join('');
+  return `<select class="status-select-inline" style="font-size:10px;${style}"
+    onchange="quickSave('${id}','${fieldKey}',this.value)"
+    onclick="event.stopPropagation()">${opts}</select>`;
+}
+
+async function quickSave(id, fieldKey, value) {
+  const model = savedModels.find(m => m.id === id);
+  if (!model) return;
+  model[fieldKey] = value;
+  await db.from('saved_models').update({ post_data: { ...model } }).eq('id', id);
+  renderInternalDBTab(currentDbType);
+  showToast(`✅ ${value || '선택 해제'} 저장됐어요`);
+}
+
+// 모델 DB 옷사이즈 필터
+function setModelSizeFilter(size) {
+  modelSizeFilter = size === '전체보기' ? '' : size;
+  document.querySelectorAll('.model-size-filter-btn').forEach(btn => {
+    const isActive = (btn.dataset.size === size) || (!modelSizeFilter && btn.dataset.size === '전체보기');
+    btn.classList.toggle('active', isActive);
+  });
+  renderInternalDBTab('model');
 }
 
 async function updateClothesSize(id, size) {
@@ -1251,7 +1282,7 @@ function renderModelDetail(p, f, avatar, images) {
 }
 
 function renderOutsourceDetail(p, f, avatar) {
-  const igUrl = p.username && p.username!=='알수없음' ? `https://www.instagram.com/${p.username}/` : '';
+  const igUrl    = p.username && p.username!=='알수없음' ? `https://www.instagram.com/${p.username}/` : '';
   const memoText = (p.memo||p.comment||'').trim();
   document.getElementById('detailModalBody').innerHTML = `
     <div class="detail-profile-top">
@@ -1260,7 +1291,7 @@ function renderOutsourceDetail(p, f, avatar) {
         <div class="detail-name">${p.fullName||'이름 없음'}</div>
         <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           ${statusBadgeHTML(p.id, p.status||'미정')}
-          ${p.category ? `<span style="font-size:12px;font-weight:700;color:var(--gray-600)">${p.category}</span>` : ''}
+          ${quickDropdown(p.id, 'category', OUTSOURCE_STEP_TYPES, p.category||'', 'background:#f0fdf4;color:#065f46;border:1.5px solid #bbf7d0')}
         </div>
       </div>
     </div>
@@ -1276,30 +1307,34 @@ function renderOutsourceDetail(p, f, avatar) {
       </div>
     </div>
     ${memoText ? `<div class="detail-section"><div class="detail-section-title">💬 코멘트</div><div class="detail-memo">${memoText}</div></div>` : ''}
+    ${galleryHTML(p)}
     ${modalFooter(igUrl)}`;
 }
 
 function renderStudioDetail(p, f, avatar) {
   const websiteUrl = p.website || '';
-  const snsUrl = p.sns ? `https://www.instagram.com/${p.sns}/` : '';
-  const memoText = (p.memo||p.comment||'').trim();
+  const snsUrl     = p.sns ? `https://www.instagram.com/${p.sns}/` : '';
+  const memoText   = (p.memo||p.comment||'').trim();
   document.getElementById('detailModalBody').innerHTML = `
     <div class="detail-profile-top">
       <div class="detail-avatar">${avatar}</div>
       <div class="detail-name-block">
         <div class="detail-name">${p.fullName||'이름 없음'}</div>
-        ${p.studioType ? `<div style="margin-top:4px;font-size:13px;color:var(--gray-500)">${p.studioType}</div>` : ''}
+        <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          ${quickDropdown(p.id, 'studioType', STUDIO_TYPES, p.studioType||'', 'background:#faf5ff;color:#6b21a8;border:1.5px solid #e9d5ff')}
+          ${quickDropdown(p.id, 'concept',    STUDIO_CONCEPTS, p.concept||'', 'background:#fff7ed;color:#c2410c;border:1.5px solid #fed7aa')}
+        </div>
       </div>
     </div>
     <div class="detail-section">
       <div class="detail-section-title">📋 스튜디오 정보</div>
       <div class="detail-grid">
         ${f('이름', p.fullName||'—', null, 'fullName')}
-        ${f('스튜디오유형', p.studioType||'—', null, 'studioType')}
         ${f('주소', p.address||p.location||'—', null, 'address')}
         ${f('렌탈료(1h)', p.price||p.fee||'—', null, 'price')}
         ${f('HOME', websiteUrl ? '홈페이지 →' : '—', websiteUrl||null)}
         ${f('SNS', snsUrl ? '@'+p.sns : '—', snsUrl||null, 'sns')}
+        ${f('컨셉(분위기)', p.concept||'—', null, 'concept')}
       </div>
     </div>
     ${memoText ? `<div class="detail-section"><div class="detail-section-title">💬 코멘트</div><div class="detail-memo">${memoText}</div></div>` : ''}
@@ -1521,7 +1556,8 @@ function renderFinalTab() {
 function renderNotionDBTab() { renderInternalDBTab(currentDbType || 'model'); }
 
 let outsourceFilter = ''; // 외주 스텝유형 필터
-const OUTSOURCE_TYPES = ['전체보기','디렉터','스타일리스트','포토그래퍼','헤어메이크업'];
+let modelSizeFilter = ''; // 모델 DB 옷사이즈 필터
+const OUTSOURCE_TYPES = ['전체보기', ...OUTSOURCE_STEP_TYPES];
 
 function setOutsourceFilter(type) {
   outsourceFilter = type === '전체보기' ? '' : type;
@@ -1542,37 +1578,49 @@ function renderInternalDBTab(dbType) {
     return (p.db_type || 'model') === dbType;
   });
 
-  // 외주 DB: 스텝유형 필터 적용
+  // 외주 DB: 스텝유형 필터
   if (dbType === 'outsource' && outsourceFilter) {
-    list = list.filter(p => (p.category || '') === outsourceFilter);
+    list = list.filter(p => (p.category||'') === outsourceFilter);
+  }
+  // 모델 DB: 옷사이즈 필터
+  if (dbType === 'model' && modelSizeFilter) {
+    list = list.filter(p => (p.clothesSize||'') === modelSizeFilter);
   }
 
   const el = document.getElementById('notionModelsList');
   if (!el) return;
 
-  // ── 외주 DB: 스텝유형 필터 탭 표시 ──────────────────
-  const outsourceFilterBar = dbType === 'outsource' ? `
-    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px">
-      ${OUTSOURCE_TYPES.map(t => `
-        <button class="outsource-filter-btn ${(!outsourceFilter && t==='전체보기')||(outsourceFilter===t)?'active':''}"
-          data-type="${t}"
-          onclick="setOutsourceFilter('${t}')"
-          style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--gray-200);
-            background:${(!outsourceFilter&&t==='전체보기')||(outsourceFilter===t)?'var(--red)':'white'};
-            color:${(!outsourceFilter&&t==='전체보기')||(outsourceFilter===t)?'white':'var(--gray-600)'};
+  // ── 필터 탭 바 생성 헬퍼 ─────────────────────────────
+  function filterBar(items, activeVal, onClickFn, btnClass) {
+    return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px">
+      ${items.map(t => {
+        const isActive = (!activeVal && t==='전체보기') || (activeVal===t);
+        return `<button class="${btnClass} ${isActive?'active':''}"
+          data-type="${t}" data-size="${t}"
+          onclick="${onClickFn}('${t}')"
+          style="padding:4px 11px;border-radius:20px;border:1.5px solid ${isActive?'var(--red)':'var(--gray-200)'};
+            background:${isActive?'var(--red)':'white'};
+            color:${isActive?'white':'var(--gray-600)'};
             font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s">
           ${t}
-        </button>`).join('')}
-    </div>` : '';
+        </button>`;
+      }).join('')}
+    </div>`;
+  }
+
+  const outsourceFilterBar = dbType === 'outsource'
+    ? filterBar(OUTSOURCE_TYPES, outsourceFilter, 'setOutsourceFilter', 'outsource-filter-btn') : '';
+  const modelSizeFilterBar  = dbType === 'model'
+    ? filterBar(['전체보기', ...CLOTHES_SIZES], modelSizeFilter, 'setModelSizeFilter', 'model-size-filter-btn') : '';
 
   const total = savedModels.filter(p => isInternalData(p) && (p.db_type||'model')===dbType).length;
 
   if (!list.length) {
-    el.innerHTML = outsourceFilterBar + `<div class="tab-empty">데이터가 없어요<br>직접 등록하거나 CSV를 업로드해 주세요</div>`;
+    el.innerHTML = (outsourceFilterBar || modelSizeFilterBar) + `<div class="tab-empty">데이터가 없어요<br>직접 등록하거나 CSV를 업로드해 주세요</div>`;
     return;
   }
 
-  el.innerHTML = outsourceFilterBar
+  el.innerHTML = (outsourceFilterBar || modelSizeFilterBar)
     + `<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">${list.length}명 표시 / 전체 ${total}명</div>`
     + list.map(p => renderDbCard(p, dbType)).join('');
 }
@@ -2051,6 +2099,7 @@ function mapStudioRow(row) {
   const price     = gi('렌탈료(1h)','렌탈료') || get('price','렌탈','fee');
   const website   = gi('HOME') || get('website','홈페이지','url');
   const sns       = gi('SNS') || get('sns','instagram','인스타');
+  const concept   = gi('분위기','컨셉','Concept') || get('concept');   // 컨셉/분위기 매핑
   const note      = gi('💬코멘트','코멘트','메모') || get('comment','Comment');
 
   const snsClean = extractInstagram(sns);
@@ -2062,6 +2111,7 @@ function mapStudioRow(row) {
     caption: note,
     permalink: snsClean ? `https://www.instagram.com/${snsClean}/` : (website || ''),
     studioType, address, price, website, sns: snsClean,
+    concept,
     location: address,
     category: studioType,
   };
