@@ -1169,47 +1169,35 @@ async function quickSave(id, fieldKey, value) {
 // 모델 DB 옷사이즈 필터
 function setModelSizeFilter(size) {
   modelSizeFilter = size === '전체보기' ? '' : size;
-  document.querySelectorAll('.model-size-filter-btn').forEach(btn => {
-    const isActive = (btn.dataset.size === size) || (!modelSizeFilter && btn.dataset.size === '전체보기');
-    btn.classList.toggle('active', isActive);
-  });
-  renderInternalDBTab('model');
+  _syncBtnStyles('model-size-filter-btn', modelSizeFilter);
+  renderDbListArea('model');
 }
 
 // 모델 DB 국적 필터
 function setModelNationalityFilter(val) {
   modelNationalityFilter = val === '전체보기' ? '' : val;
-  document.querySelectorAll('.model-nationality-btn').forEach(btn => {
-    const isActive = (btn.dataset.val === val) || (!modelNationalityFilter && btn.dataset.val === '전체보기');
-    btn.classList.toggle('active', isActive);
-  });
-  renderInternalDBTab('model');
+  _syncBtnStyles('model-nationality-btn', modelNationalityFilter);
+  renderDbListArea('model');
 }
 
 // 모델 DB 성별 필터
 function setModelGenderFilter(val) {
   modelGenderFilter = val === '전체보기' ? '' : val;
-  document.querySelectorAll('.model-gender-btn').forEach(btn => {
-    const isActive = (btn.dataset.val === val) || (!modelGenderFilter && btn.dataset.val === '전체보기');
-    btn.classList.toggle('active', isActive);
-  });
-  renderInternalDBTab('model');
+  _syncBtnStyles('model-gender-btn', modelGenderFilter);
+  renderDbListArea('model');
 }
 
 // 모델 DB 카테고리 필터
 function setModelCategoryFilter(val) {
   modelCategoryFilter = val === '전체보기' ? '' : val;
-  document.querySelectorAll('.model-category-btn').forEach(btn => {
-    const isActive = (btn.dataset.val === val) || (!modelCategoryFilter && btn.dataset.val === '전체보기');
-    btn.classList.toggle('active', isActive);
-  });
-  renderInternalDBTab('model');
+  _syncBtnStyles('model-category-btn', modelCategoryFilter);
+  renderDbListArea('model');
 }
 
-// DB 공통 검색어
+// DB 공통 검색어 — 검색창 DOM을 절대 파괴하지 않고 리스트만 갱신
 function setDbSearch(dbType, query) {
-  dbSearchQuery = (query || '').trim().toLowerCase();
-  renderInternalDBTab(dbType);
+  dbSearchQuery = (query || '').toLowerCase();
+  renderDbListArea(dbType);
 }
 
 // ── 컨셉 배열 파싱 헬퍼 ──────────────────────────────
@@ -1685,131 +1673,171 @@ const MODEL_NATIONALITIES= ['전체보기', '한국', '외국', '혼혈', 'AI'];
 const MODEL_GENDERS      = ['전체보기', '여아', '남아'];
 const MODEL_CATEGORIES   = ['전체보기', '베이비', '키즈', '주니어', '토들러'];
 
-function setOutsourceFilter(type) {
-  outsourceFilter = type === '전체보기' ? '' : type;
-  // 탭 버튼 활성화 갱신
-  document.querySelectorAll('.outsource-filter-btn').forEach(btn => {
-    const isActive = (btn.dataset.type === type) || (!type && btn.dataset.type === '전체보기');
+// ── 필터 버튼 inline-style 동기화 헬퍼 (DOM 파괴 없이 active 갱신) ─
+function _syncBtnStyles(btnClass, currentFilterVal) {
+  document.querySelectorAll('.' + btnClass).forEach(btn => {
+    const v = btn.dataset.val || btn.dataset.type || btn.dataset.size || '';
+    const isActive = currentFilterVal ? (v === currentFilterVal) : (v === '전체보기');
     btn.classList.toggle('active', isActive);
+    btn.style.background  = isActive ? 'var(--red)' : 'white';
+    btn.style.color       = isActive ? 'white'      : 'var(--gray-600)';
+    btn.style.borderColor = isActive ? 'var(--red)' : 'var(--gray-200)';
   });
-  renderInternalDBTab('outsource');
 }
 
+function setOutsourceFilter(type) {
+  outsourceFilter = type === '전체보기' ? '' : type;
+  _syncBtnStyles('outsource-filter-btn', outsourceFilter);
+  renderDbListArea('outsource');
+}
+
+// ══════════════════════════════════════════════════════
+// DB 탭 렌더링 — 3분할 구조
+// #dbFilterArea : 검색창 + 필터 버튼 (탭 전환 시 1회 렌더)
+// #dbListArea   : 카드 리스트 (검색·필터·저장 시마다 갱신)
+// ══════════════════════════════════════════════════════
+
+// ── 공통 진입점 (탭 전환 / 저장 / 삭제 후 호출) ────────
 function renderInternalDBTab(dbType) {
   const titleEl = document.getElementById('dbTabTitle');
   if (titleEl) titleEl.textContent = DB_TYPE_LABEL[dbType] || '모델 DB';
 
-  const el = document.getElementById('notionModelsList');
-  if (!el) return;
+  const container = document.getElementById('notionModelsList');
+  if (!container) return;
 
-  // ── 필터 탭 바 생성 헬퍼 ─────────────────────────────
-  function filterBar(items, activeVal, onClickFn, btnClass, dataAttr) {
+  // 구조 분리: dbType이 바뀌었거나 아직 초기화 안 됐으면 골격 세팅
+  const filterEl = document.getElementById('dbFilterArea');
+  if (!filterEl || filterEl.dataset.dbtype !== dbType) {
+    container.innerHTML = '<div id="dbFilterArea"></div><div id="dbListArea"></div>';
+    _renderDbFilterArea(dbType);
+  } else {
+    // 같은 탭이면 검색창 값만 복원 (인라인 저장 후 재렌더 시 검색어 유지)
+    const inp = document.getElementById('dbSearchInput');
+    if (inp && dbSearchQuery && !inp.value) inp.value = dbSearchQuery;
+  }
+  renderDbListArea(dbType);
+}
+
+// ── 검색창 + 필터 버튼 영역 (DOM 한 번만 그림) ─────────
+function _renderDbFilterArea(dbType) {
+  const el = document.getElementById('dbFilterArea');
+  if (!el) return;
+  el.dataset.dbtype = dbType;
+
+  // 필터 버튼 행 빌더
+  function fBar(items, activeVal, onClickFn, btnClass) {
     return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">
       ${items.map(t => {
-        const isActive = (!activeVal && t==='전체보기') || (activeVal===t);
-        return `<button class="${btnClass} ${isActive?'active':''}"
-          data-type="${t}" data-size="${t}" data-val="${t}" ${dataAttr||''}
+        const on = (!activeVal && t==='전체보기') || activeVal===t;
+        return `<button class="${btnClass} ${on?'active':''}"
+          data-type="${t}" data-size="${t}" data-val="${t}"
           onclick="${onClickFn}('${t}')"
-          style="padding:4px 11px;border-radius:20px;border:1.5px solid ${isActive?'var(--red)':'var(--gray-200)'};
-            background:${isActive?'var(--red)':'white'};
-            color:${isActive?'white':'var(--gray-600)'};
+          style="padding:4px 11px;border-radius:20px;
+            border:1.5px solid ${on?'var(--red)':'var(--gray-200)'};
+            background:${on?'var(--red)':'white'};
+            color:${on?'white':'var(--gray-600)'};
             font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s">
-          ${t}
-        </button>`;
+          ${t}</button>`;
       }).join('')}
     </div>`;
   }
 
-  // ── 검색창 생성 헬퍼 ─────────────────────────────────
-  function searchBar(placeholder) {
-    const escaped = dbSearchQuery.replace(/"/g,'&quot;');
-    return `<div style="margin-bottom:12px;position:relative">
-      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--gray-400);pointer-events:none">🔍</span>
-      <input type="text" value="${escaped}" placeholder="${placeholder}"
+  // 소형 필터 버튼 행 (국적·성별·카테고리)
+  function sBtnRow(items, activeVal, onClickFn, btnClass) {
+    return `<div style="display:flex;gap:3px;flex-wrap:wrap">
+      ${items.map(v => {
+        const on = (!activeVal && v==='전체보기') || activeVal===v;
+        return `<button class="${btnClass} ${on?'active':''}" data-val="${v}"
+          onclick="${onClickFn}('${v}')"
+          style="padding:3px 9px;border-radius:20px;
+            border:1.5px solid ${on?'var(--red)':'var(--gray-200)'};
+            background:${on?'var(--red)':'white'};color:${on?'white':'var(--gray-600)'};
+            font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s">
+          ${v}</button>`;
+      }).join('')}
+    </div>`;
+  }
+
+  const placeholders = {
+    model:     '이름, 인스타ID, 코멘트 검색...',
+    outsource: '이름, 담당자, 코멘트 검색...',
+    studio:    '스튜디오 이름, 주소, 코멘트 검색...'
+  };
+
+  // 검색창 — id="dbSearchInput" 고정 (포커스 유지용)
+  let html = `
+    <div style="margin-bottom:12px;position:relative">
+      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);
+        font-size:13px;color:var(--gray-400);pointer-events:none">🔍</span>
+      <input id="dbSearchInput" type="text"
+        placeholder="${placeholders[dbType]||'검색...'}"
         oninput="setDbSearch('${dbType}',this.value)"
-        style="width:100%;padding:8px 10px 8px 32px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);
-          font-family:inherit;font-size:13px;color:var(--gray-800);background:var(--gray-50);outline:none;transition:border-color .15s"
+        style="width:100%;padding:8px 10px 8px 32px;border:1.5px solid var(--gray-200);
+          border-radius:var(--r-sm);font-family:inherit;font-size:13px;
+          color:var(--gray-800);background:var(--gray-50);outline:none;transition:border-color .15s"
         onfocus="this.style.borderColor='var(--red)';this.style.background='white'"
         onblur="this.style.borderColor='var(--gray-200)';this.style.background='var(--gray-50)'">
     </div>`;
-  }
-
-  // ── 필터 구성 ────────────────────────────────────────
-  let filterHTML = '';
 
   if (dbType === 'model') {
-    // 1행: 검색창
-    filterHTML += searchBar('이름, 인스타ID, 코멘트 검색...');
-    // 2행: 옷사이즈 탭
-    filterHTML += `<div style="font-size:10px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">옷사이즈</div>`;
-    filterHTML += filterBar(['전체보기', ...CLOTHES_SIZES], modelSizeFilter, 'setModelSizeFilter', 'model-size-filter-btn');
-    // 3행: 국적 · 성별 · 카테고리 드롭다운 행
-    filterHTML += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-end">`;
+    html += `<div style="font-size:10px;font-weight:700;color:var(--gray-400);
+      text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">옷사이즈</div>`;
+    html += fBar(['전체보기', ...CLOTHES_SIZES], modelSizeFilter, 'setModelSizeFilter', 'model-size-filter-btn');
+
+    html += `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-start">`;
     // 국적
-    filterHTML += `<div style="min-width:0">
-      <div style="font-size:10px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">국적</div>
-      <div style="display:flex;gap:3px;flex-wrap:wrap">
-        ${MODEL_NATIONALITIES.map(v => {
-          const isA = (!modelNationalityFilter && v==='전체보기') || modelNationalityFilter===v;
-          return `<button class="model-nationality-btn ${isA?'active':''}" data-val="${v}"
-            onclick="setModelNationalityFilter('${v}')"
-            style="padding:3px 9px;border-radius:20px;border:1.5px solid ${isA?'var(--red)':'var(--gray-200)'};
-              background:${isA?'var(--red)':'white'};color:${isA?'white':'var(--gray-600)'};
-              font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s">${v}</button>`;
-        }).join('')}
-      </div>
+    html += `<div>
+      <div style="font-size:10px;font-weight:700;color:var(--gray-400);
+        text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">국적</div>
+      ${sBtnRow(MODEL_NATIONALITIES, modelNationalityFilter, 'setModelNationalityFilter', 'model-nationality-btn')}
     </div>`;
     // 성별
-    filterHTML += `<div style="min-width:0">
-      <div style="font-size:10px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">성별</div>
-      <div style="display:flex;gap:3px">
-        ${MODEL_GENDERS.map(v => {
-          const isA = (!modelGenderFilter && v==='전체보기') || modelGenderFilter===v;
-          return `<button class="model-gender-btn ${isA?'active':''}" data-val="${v}"
-            onclick="setModelGenderFilter('${v}')"
-            style="padding:3px 9px;border-radius:20px;border:1.5px solid ${isA?'var(--red)':'var(--gray-200)'};
-              background:${isA?'var(--red)':'white'};color:${isA?'white':'var(--gray-600)'};
-              font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s">${v}</button>`;
-        }).join('')}
-      </div>
+    html += `<div>
+      <div style="font-size:10px;font-weight:700;color:var(--gray-400);
+        text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">성별</div>
+      ${sBtnRow(MODEL_GENDERS, modelGenderFilter, 'setModelGenderFilter', 'model-gender-btn')}
     </div>`;
     // 카테고리
-    filterHTML += `<div style="min-width:0">
-      <div style="font-size:10px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">카테고리</div>
-      <div style="display:flex;gap:3px;flex-wrap:wrap">
-        ${MODEL_CATEGORIES.map(v => {
-          const isA = (!modelCategoryFilter && v==='전체보기') || modelCategoryFilter===v;
-          return `<button class="model-category-btn ${isA?'active':''}" data-val="${v}"
-            onclick="setModelCategoryFilter('${v}')"
-            style="padding:3px 9px;border-radius:20px;border:1.5px solid ${isA?'var(--red)':'var(--gray-200)'};
-              background:${isA?'var(--red)':'white'};color:${isA?'white':'var(--gray-600)'};
-              font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s">${v}</button>`;
-        }).join('')}
-      </div>
+    html += `<div>
+      <div style="font-size:10px;font-weight:700;color:var(--gray-400);
+        text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">카테고리</div>
+      ${sBtnRow(MODEL_CATEGORIES, modelCategoryFilter, 'setModelCategoryFilter', 'model-category-btn')}
     </div>`;
-    filterHTML += `</div>`; // end flex row
+    html += `</div>`;
   } else if (dbType === 'outsource') {
-    filterHTML += searchBar('이름, 담당자, 코멘트 검색...');
-    filterHTML += filterBar(OUTSOURCE_TYPES, outsourceFilter, 'setOutsourceFilter', 'outsource-filter-btn');
-  } else if (dbType === 'studio') {
-    filterHTML += searchBar('스튜디오 이름, 주소, 코멘트 검색...');
+    html += fBar(OUTSOURCE_TYPES, outsourceFilter, 'setOutsourceFilter', 'outsource-filter-btn');
+  }
+  // studio: 검색창만 있으면 충분
+
+  el.innerHTML = html;
+  // 검색어 복원 (인라인 저장 후 재호출 대비)
+  if (dbSearchQuery) {
+    const inp = document.getElementById('dbSearchInput');
+    if (inp) inp.value = dbSearchQuery;
+  }
+}
+
+// ── 카드 리스트 영역만 갱신 (검색·필터 변경 시 호출) ────
+function renderDbListArea(dbType) {
+  const el = document.getElementById('dbListArea');
+  if (!el) {
+    // 혹시 구조가 없으면 풀렌더로 폴백
+    renderInternalDBTab(dbType);
+    return;
   }
 
-  // ── 데이터 필터링 ────────────────────────────────────
+  // ── 데이터 필터링 ──────────────────────────────────
   let list = savedModels.filter(p => {
     if (!isInternalData(p)) return false;
     return (p.db_type || 'model') === dbType;
   });
 
-  // 외주 DB: 스텝유형 필터
-  if (dbType === 'outsource' && outsourceFilter) {
+  if (dbType === 'outsource' && outsourceFilter)
     list = list.filter(p => (p.category||'') === outsourceFilter);
-  }
-  // 모델 DB: 옷사이즈 필터
-  if (dbType === 'model' && modelSizeFilter) {
+
+  if (dbType === 'model' && modelSizeFilter)
     list = list.filter(p => (p.clothesSize||'') === modelSizeFilter);
-  }
-  // 모델 DB: 국적 필터
+
   if (dbType === 'model' && modelNationalityFilter) {
     list = list.filter(p => {
       const nat = (p.nationality||'한국').trim();
@@ -1820,7 +1848,7 @@ function renderInternalDBTab(dbType) {
       return true;
     });
   }
-  // 모델 DB: 성별 필터
+
   if (dbType === 'model' && modelGenderFilter) {
     list = list.filter(p => {
       const g = (p.gender||'').trim();
@@ -1829,42 +1857,36 @@ function renderInternalDBTab(dbType) {
       return true;
     });
   }
-  // 모델 DB: 카테고리 필터
-  if (dbType === 'model' && modelCategoryFilter) {
+
+  if (dbType === 'model' && modelCategoryFilter)
     list = list.filter(p => (p.category||'') === modelCategoryFilter);
-  }
-  // 공통: 검색어 필터
+
   if (dbSearchQuery) {
     const q = dbSearchQuery;
     list = list.filter(p => {
-      if (dbType === 'model') {
+      if (dbType === 'model')
         return (p.fullName||'').toLowerCase().includes(q)
           || (p.username||'').toLowerCase().includes(q)
           || (p.caption||'').toLowerCase().includes(q)
           || (p.comment||'').toLowerCase().includes(q);
-      } else if (dbType === 'outsource') {
+      if (dbType === 'outsource')
         return (p.fullName||p.name||'').toLowerCase().includes(q)
           || (p.contact||p.phone||'').toLowerCase().includes(q)
           || (p.caption||'').toLowerCase().includes(q);
-      } else if (dbType === 'studio') {
+      if (dbType === 'studio')
         return (p.fullName||p.name||'').toLowerCase().includes(q)
           || (p.address||p.location||'').toLowerCase().includes(q)
           || (p.caption||'').toLowerCase().includes(q);
-      }
       return true;
     });
   }
 
   const total = savedModels.filter(p => isInternalData(p) && (p.db_type||'model')===dbType).length;
 
-  if (!list.length) {
-    el.innerHTML = filterHTML + `<div class="tab-empty">조건에 맞는 데이터가 없어요<br>필터를 조정하거나 직접 등록해 주세요</div>`;
-    return;
-  }
-
-  el.innerHTML = filterHTML
-    + `<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">${list.length}명 표시 / 전체 ${total}명</div>`
-    + list.map(p => renderDbCard(p, dbType)).join('');
+  el.innerHTML = list.length
+    ? `<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">${list.length}명 표시 / 전체 ${total}명</div>`
+      + list.map(p => renderDbCard(p, dbType)).join('')
+    : `<div class="tab-empty">조건에 맞는 데이터가 없어요<br>필터를 조정하거나 직접 등록해 주세요</div>`;
 }
 
 // ── db_type별 카드 렌더링 라우터 ─────────────────────
