@@ -6,20 +6,17 @@ import { createClient } from '@supabase/supabase-js';
 // ==========================================
 // 1. 환경변수 및 초기 세팅
 // ==========================================
-// 백엔드 전용 권한인 service_role 키를 사용하여 RLS(보안정책) 우회
 const supabase = createClient(
   process.env.SUPABASE_URL || 'https://qbrpjngmuxcybhnogkfr.supabase.co',
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY 
 );
 
 export default async function handler(req, res) {
-  // CORS 처리
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
-  // POST 요청만 허용
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -31,15 +28,14 @@ export default async function handler(req, res) {
 
   const notion = new Client({ auth: NOTION_TOKEN });
 
-  // 환경변수 이름 혼용 방어: NOTION_DB_ID가 있으면 모델 DB로 간주
   const databases = [
     { id: process.env.NOTION_MODEL_DB_ID || process.env.NOTION_DB_ID, type: 'model' },
     { id: process.env.NOTION_OUTSOURCE_DB_ID, type: 'outsource' },
     { id: process.env.NOTION_STUDIO_DB_ID, type: 'studio' }
-  ].filter(db => db.id); // ID가 있는 DB만 필터링
+  ].filter(db => db.id);
 
   if (databases.length === 0) {
-     return res.status(500).json({ error: '동기화할 NOTION DB ID가 Vercel 환경변수에 하나도 없습니다.' });
+     return res.status(500).json({ error: '동기화할 NOTION DB ID가 없습니다.' });
   }
 
   let totalFetched = 0;
@@ -51,7 +47,6 @@ export default async function handler(req, res) {
       let hasMore = true;
       let nextCursor = undefined;
 
-      // 페이지네이션을 통해 노션 DB의 모든 항목 가져오기
       while (hasMore) {
         const response = await notion.databases.query({
           database_id: db.id,
@@ -61,12 +56,11 @@ export default async function handler(req, res) {
         const pages = response.results;
         totalFetched += pages.length;
 
-        // 각 페이지(모델 1명)마다 병렬/순차 처리
-        for (const page of pages) {
+        // 🚀 [핵심] Promise.all을 활용한 초고속 병렬(동시) 처리 모드
+        await Promise.all(pages.map(async (page) => {
           try {
             const props = page.properties;
             
-            // 노션 프로퍼티 파싱 헬퍼 함수
             const getVal = (keys, type) => {
               for (const k of keys) {
                 const p = props[k];
@@ -81,17 +75,16 @@ export default async function handler(req, res) {
               return '';
             };
 
-            // 노션 이미지(임시) -> Supabase 다이렉트 업로드 (Migration)
             const files = getVal(['사진', '이미지', 'Files', '프로필'], 'files') || [];
-            const permanentImageUrls = [];
-
-            for (const file of files) {
+            
+            // 🚀 사진 다운로드/업로드 역시 병렬 처리
+            const permanentImageUrls = (await Promise.all(files.map(async (file) => {
               const fileUrl = file.type === 'file' ? file.file.url : file.external?.url;
-              if (!fileUrl) continue;
+              if (!fileUrl) return null;
 
               try {
                 const imgRes = await fetch(fileUrl);
-                if (!imgRes.ok) continue;
+                if (!imgRes.ok) return null;
                 const arrayBuffer = await imgRes.arrayBuffer();
                 const buffer = Buffer.from(arrayBuffer);
 
@@ -108,18 +101,18 @@ export default async function handler(req, res) {
                 if (!uploadErr) {
                   const { data: publicData } = supabase.storage.from('model-photos').getPublicUrl(safeName);
                   if (publicData?.publicUrl) {
-                    permanentImageUrls.push(publicData.publicUrl);
                     imagesOK++;
+                    return publicData.publicUrl;
                   }
                 }
               } catch (imgError) {
-                console.error('이미지 업로드 실패:', imgError);
+                return null;
               }
-            }
+              return null;
+            }))).filter(Boolean);
 
-            // 데이터 매핑 (DB 타입별 속성 추출)
             const fullName = getVal(['이름', 'Name', '모델명', '성명'], 'title');
-            if (!fullName) continue;
+            if (!fullName) return; // 이름 없으면 스킵
 
             const rawInsta = getVal(['인스타그램', '인스타', 'Instagram', 'SNS'], 'rich_text') || getVal(['인스타그램', '인스타'], 'url') || '';
             const username = rawInsta.replace(/https?:\/\/(?:www\.)?instagram\.com\//i,'').replace(/\?.*/,'').replace(/\//g,'').replace(/^@/,'').trim();
@@ -154,15 +147,9 @@ export default async function handler(req, res) {
               postData.status = getVal(['진행여부', 'Status'], 'select') || '미정';
               postData.fee = getVal(['촬영료', '페이'], 'rich_text');
               postData.memo = getVal(['코멘트', '메모', '비고'], 'rich_text');
-              
-              const bioArr = [
-                postData.height && `키 ${postData.height}`,
-                postData.weight && `몸무게 ${postData.weight}`,
-                postData.birthDate
-              ].filter(Boolean);
+              const bioArr = [postData.height && `키 ${postData.height}`, postData.weight && `몸무게 ${postData.weight}`, postData.birthDate].filter(Boolean);
               postData.biography = bioArr.join(' / ');
               postData.caption = [postData.memo, postData.category].filter(Boolean).join(' | ');
-
             } else if (db.type === 'outsource') {
               postData.category = getVal(['스텝유형'], 'select');
               postData.status = getVal(['진행유무'], 'select');
@@ -172,7 +159,6 @@ export default async function handler(req, res) {
               postData.memo = getVal(['코멘트', '메모'], 'rich_text');
               postData.biography = [postData.category, postData.contact].filter(Boolean).join(' / ');
               postData.caption = postData.memo;
-
             } else if (db.type === 'studio') {
               postData.studioType = getVal(['스튜디오유형'], 'select');
               postData.address = getVal(['주소'], 'rich_text');
@@ -185,17 +171,13 @@ export default async function handler(req, res) {
               postData.caption = postData.memo;
             }
 
-            // Supabase Database에 안전하게 저장 (upsert)
-            const { error: upsertErr } = await supabase
-              .from('saved_models')
-              .upsert({ id: postData.id, post_data: postData }, { onConflict: 'id' });
-
+            const { error: upsertErr } = await supabase.from('saved_models').upsert({ id: postData.id, post_data: postData }, { onConflict: 'id' });
             if (!upsertErr) totalUpserted++;
 
           } catch (itemError) {
-            console.error(`항목 매핑/저장 실패 (Page ID: ${page.id}):`, itemError);
+            console.error(`항목 매핑 에러:`, itemError);
           }
-        }
+        }));
 
         nextCursor = response.next_cursor;
         hasMore = response.has_more;
@@ -204,7 +186,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ 
       success: true, 
-      message: `전체 DB 마이그레이션 완료! (조회: ${totalFetched}명, 저장: ${totalUpserted}명, 사진: ${imagesOK}장)`,
+      message: `초고속 마이그레이션 완료! (조회: ${totalFetched}명, 사진: ${imagesOK}장)`,
       total: totalFetched,
       upserted: totalUpserted,
       imagesOK: imagesOK
