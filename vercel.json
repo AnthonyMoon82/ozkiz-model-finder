@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "api/sync-notion.js": {
+      "maxDuration": 60
+    },
+    "api/search.js": {
+      "maxDuration": 120
+    }
+  }
+}
