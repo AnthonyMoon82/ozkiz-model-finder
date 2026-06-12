@@ -302,6 +302,50 @@
   }
   .saved-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 
+  /* ── 보기 모드 토글 ─────────────────────────────── */
+  .view-toggle-group {
+    display: flex; gap: 2px;
+    background: var(--gray-100); border-radius: 8px; padding: 3px;
+    flex-shrink: 0;
+  }
+  .view-toggle-btn {
+    padding: 4px 10px; border: none; border-radius: 6px;
+    font-family: inherit; font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: all .15s;
+    background: transparent; color: var(--gray-500);
+  }
+  .view-toggle-btn.active {
+    background: white; color: var(--gray-800);
+    box-shadow: 0 1px 3px rgba(0,0,0,.12);
+  }
+
+  /* ── 카드형 그리드 (DB 탭 + 1차픽/최종누적) ──────── */
+  .thumb-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .thumb-card {
+    background: white; border: 1px solid var(--gray-200);
+    border-radius: var(--r-md); overflow: hidden;
+    cursor: pointer; transition: box-shadow .2s, transform .15s;
+    box-shadow: var(--shadow-xs);
+  }
+  .thumb-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+  .thumb-card-img {
+    width: 100%; aspect-ratio: 3/4;
+    background: var(--gray-100);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px; overflow: hidden; position: relative;
+  }
+  .thumb-card-img img { width: 100%; height: 100%; object-fit: cover; }
+  .thumb-card-body { padding: 8px 10px 10px; }
+  .thumb-card-name { font-weight: 700; font-size: 12px; color: var(--gray-900);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .thumb-card-sub { font-size: 10px; color: var(--gray-500); margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .thumb-card-badges { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; }
+
   /* 다중 평가자 별점 — 가로 한 줄 배치 */
   .multi-rating-wrap {
     background: var(--gray-50); border-radius: 8px;
@@ -629,15 +673,21 @@
       <!-- 1차픽/최종누적 탭 헤더 -->
       <div class="toolbar" id="saved-toolbar" style="display:none">
         <div class="result-info" id="saved-resultInfo">📥 1차 픽</div>
-        <div class="project-filter-wrap">
-          <span class="project-filter-label">프로젝트</span>
-          <select id="projectFilter" class="project-select" style="width:160px"
-            onchange="renderCurrentSavedTab()">
-            <option value="">전체 보기</option>
-            <option value="2026 S/S 룩북">2026 S/S 룩북</option>
-            <option value="2026 F/W 아우터">2026 F/W 아우터</option>
-            <option value="상시 피팅">상시 피팅</option>
-          </select>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div class="project-filter-wrap">
+            <span class="project-filter-label">프로젝트</span>
+            <select id="projectFilter" class="project-select" style="width:160px"
+              onchange="renderCurrentSavedTab()">
+              <option value="">전체 보기</option>
+              <option value="2026 S/S 룩북">2026 S/S 룩북</option>
+              <option value="2026 F/W 아우터">2026 F/W 아우터</option>
+              <option value="상시 피팅">상시 피팅</option>
+            </select>
+          </div>
+          <div class="view-toggle-group" id="savedViewToggle">
+            <button class="view-toggle-btn" id="savedViewList" onclick="setViewMode('list')" title="리스트형">☰ 리스트</button>
+            <button class="view-toggle-btn" id="savedViewCard" onclick="setViewMode('card')" title="카드형">⣿ 카드</button>
+          </div>
         </div>
       </div>
 
@@ -988,6 +1038,7 @@ function switchTab(tab) {
     document.getElementById('final-list').style.display = tab === 'final' ? '' : 'none';
     document.getElementById('saved-resultInfo').textContent =
       tab === 'pick' ? '📥 1차 픽' : '⭐ 최종 누적';
+    _syncSavedViewToggle();
   }
 
   if (tab === 'pick')  renderPickTab();
@@ -1656,9 +1707,20 @@ function renderPickTab() {
   let picks = savedModels.filter(p => !isReadyForFinal(p) && !isInternalData(p));
   picks = applyProjectFilter(picks);
   updateTabBadges();
-  document.getElementById('pick-list').innerHTML = picks.length
-    ? picks.map(p => savedModelCard(p)).join('')
-    : `<div class="tab-empty">📭 1차 픽된 모델이 없어요<br>검색 탭에서 모델을 저장해 보세요</div>`;
+  _syncSavedViewToggle();
+
+  if (!picks.length) {
+    document.getElementById('pick-list').innerHTML =
+      `<div class="tab-empty">📭 1차 픽된 모델이 없어요<br>검색 탭에서 모델을 저장해 보세요</div>`;
+    return;
+  }
+
+  if (dbViewMode === 'card') {
+    document.getElementById('pick-list').innerHTML =
+      `<div class="thumb-cards-grid">${picks.map(p => savedModelCard_thumb(p)).join('')}</div>`;
+  } else {
+    document.getElementById('pick-list').innerHTML = picks.map(p => savedModelCard(p)).join('');
+  }
 }
 
 function renderFinalTab() {
@@ -1666,9 +1728,28 @@ function renderFinalTab() {
   let finals = savedModels.filter(p => isReadyForFinal(p) && !isInternalData(p));
   finals = applyProjectFilter(finals);
   updateTabBadges();
-  document.getElementById('final-list').innerHTML = finals.length
-    ? finals.map(p => savedModelCard(p)).join('')
-    : `<div class="tab-empty">⭐ 아직 최종 선발된 모델이 없어요<br>${MIN_VOTERS}명 이상 투표 + 평균 3점 이상이면 이동해요</div>`;
+  _syncSavedViewToggle();
+
+  if (!finals.length) {
+    document.getElementById('final-list').innerHTML =
+      `<div class="tab-empty">⭐ 아직 최종 선발된 모델이 없어요<br>${MIN_VOTERS}명 이상 투표 + 평균 3점 이상이면 이동해요</div>`;
+    return;
+  }
+
+  if (dbViewMode === 'card') {
+    document.getElementById('final-list').innerHTML =
+      `<div class="thumb-cards-grid">${finals.map(p => savedModelCard_thumb(p)).join('')}</div>`;
+  } else {
+    document.getElementById('final-list').innerHTML = finals.map(p => savedModelCard(p)).join('');
+  }
+}
+
+// saved-toolbar 토글 버튼 active 상태 동기화
+function _syncSavedViewToggle() {
+  const sl = document.getElementById('savedViewList');
+  const sc = document.getElementById('savedViewCard');
+  if (sl) sl.classList.toggle('active', dbViewMode !== 'card');
+  if (sc) sc.classList.toggle('active', dbViewMode === 'card');
 }
 
 // ── DB 탭 렌더링 ─────────────────────────────────────
@@ -1680,6 +1761,7 @@ let modelNationalityFilter  = ''; // 모델 DB 국적 필터
 let modelGenderFilter       = ''; // 모델 DB 성별 필터
 let modelCategoryFilter     = ''; // 모델 DB 카테고리 필터
 let dbSearchQuery           = ''; // DB 공통 검색어
+let dbViewMode = localStorage.getItem('ozkiz_db_view_mode') || 'list'; // 'list' | 'card'
 const OUTSOURCE_TYPES    = ['전체보기', ...OUTSOURCE_STEP_TYPES];
 const MODEL_NATIONALITIES= ['전체보기', '한국', '외국', '혼혈', 'AI'];
 const MODEL_GENDERS      = ['전체보기', '여아', '남아'];
@@ -1695,6 +1777,29 @@ function _syncBtnStyles(btnClass, currentFilterVal) {
     btn.style.color       = isActive ? 'white'      : 'var(--gray-600)';
     btn.style.borderColor = isActive ? 'var(--red)' : 'var(--gray-200)';
   });
+}
+
+// ── 보기 모드 전환 ──────────────────────────────────────
+function setViewMode(mode) {
+  dbViewMode = mode;
+  localStorage.setItem('ozkiz_db_view_mode', mode);
+
+  // saved-toolbar 버튼 동기화
+  const sl = document.getElementById('savedViewList');
+  const sc = document.getElementById('savedViewCard');
+  if (sl) sl.classList.toggle('active', mode === 'list');
+  if (sc) sc.classList.toggle('active', mode === 'card');
+
+  // DB 필터 영역 버튼 동기화 (dbFilterArea 안에 있을 경우)
+  const dl = document.getElementById('dbViewList');
+  const dc = document.getElementById('dbViewCard');
+  if (dl) dl.classList.toggle('active', mode === 'list');
+  if (dc) dc.classList.toggle('active', mode === 'card');
+
+  // 현재 탭 즉시 재렌더
+  if (currentSidebarTab === 'pick')  renderPickTab();
+  else if (currentSidebarTab === 'final') renderFinalTab();
+  else renderDbListArea(currentDbType);
 }
 
 function setOutsourceFilter(type) {
@@ -1821,6 +1926,19 @@ function _renderDbFilterArea(dbType) {
   }
   // studio: 검색창만 있으면 충분
 
+  // ── 보기 모드 토글 버튼 ──────────────────────────────
+  const listActive = dbViewMode !== 'card';
+  const cardActive = dbViewMode === 'card';
+  html += `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <div class="view-toggle-group" id="dbViewToggle">
+        <button class="view-toggle-btn ${listActive?'active':''}" id="dbViewList"
+          onclick="setViewMode('list')" title="리스트형">☰ 리스트</button>
+        <button class="view-toggle-btn ${cardActive?'active':''}" id="dbViewCard"
+          onclick="setViewMode('card')" title="카드형">⣿ 카드</button>
+      </div>
+    </div>`;
+
   el.innerHTML = html;
   // 검색어 복원 (인라인 저장 후 재호출 대비)
   if (dbSearchQuery) {
@@ -1894,18 +2012,33 @@ function renderDbListArea(dbType) {
   }
 
   const total = savedModels.filter(p => isInternalData(p) && (p.db_type||'model')===dbType).length;
+  const countHtml = `<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">${list.length}명 표시 / 전체 ${total}명</div>`;
 
-  el.innerHTML = list.length
-    ? `<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">${list.length}명 표시 / 전체 ${total}명</div>`
-      + list.map(p => renderDbCard(p, dbType)).join('')
-    : `<div class="tab-empty">조건에 맞는 데이터가 없어요<br>필터를 조정하거나 직접 등록해 주세요</div>`;
+  if (!list.length) {
+    el.innerHTML = `<div class="tab-empty">조건에 맞는 데이터가 없어요<br>필터를 조정하거나 직접 등록해 주세요</div>`;
+    return;
+  }
+
+  if (dbViewMode === 'card') {
+    el.innerHTML = countHtml +
+      `<div class="thumb-cards-grid">${list.map(p => renderDbCard_thumb(p, dbType)).join('')}</div>`;
+  } else {
+    el.innerHTML = countHtml + list.map(p => renderDbCard(p, dbType)).join('');
+  }
 }
 
-// ── db_type별 카드 렌더링 라우터 ─────────────────────
+// ── db_type별 카드 렌더링 라우터 (리스트형) ──────────
 function renderDbCard(p, dbType) {
   if (dbType === 'outsource') return renderOutsourceCard(p);
   if (dbType === 'studio')    return renderStudioCard(p);
   return renderModelCard_list(p);
+}
+
+// ── db_type별 카드 렌더링 라우터 (카드형) ────────────
+function renderDbCard_thumb(p, dbType) {
+  if (dbType === 'outsource') return renderOutsourceCard_thumb(p);
+  if (dbType === 'studio')    return renderStudioCard_thumb(p);
+  return renderModelCard_thumb(p);
 }
 
 function cardShell(p, inner) {
@@ -1987,6 +2120,89 @@ function renderStudioCard(p) {
       ${websiteLink}
     </div>
     ${conceptBadges ? `<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">${conceptBadges}</div>` : ''}`);
+}
+
+// ══════════════════════════════════════════════════════
+//  카드형(⣿) 썸네일 카드 렌더러 — DB 탭 + 1차픽/최종누적
+// ══════════════════════════════════════════════════════
+
+function _thumbImgHtml(p) {
+  const url = (Array.isArray(p.images) && p.images[0]) || p.imgUrl || '';
+  return url
+    ? `<img src="${url}" style="width:100%;height:100%;object-fit:cover"
+         onerror="this.onerror=null;this.parentElement.innerHTML='👤'">`
+    : '👤';
+}
+
+// 🗂️ 모델 DB — 카드형
+function renderModelCard_thumb(p) {
+  const sp        = extractChildProfile(p);
+  const heightVal = p.height ? p.height+'cm' : sp.height;
+  const clothesBadge = p.clothesSize
+    ? `<span class="profile-badge" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe">${p.clothesSize}</span>` : '';
+  const igText = p.username && p.username!=='알수없음' ? `@${p.username}` : '';
+  return `<div class="thumb-card" onclick="openModelDetailModal('${p.id}')">
+    <div class="thumb-card-img">${_thumbImgHtml(p)}</div>
+    <div class="thumb-card-body">
+      <div class="thumb-card-name">${p.fullName || p.username || '—'}</div>
+      <div class="thumb-card-sub">${igText || (heightVal||'')}</div>
+      <div class="thumb-card-badges">
+        ${statusBadgeHTML(p.id, p.status||'미정','9px')}
+        ${clothesBadge}
+        ${heightVal && igText ? `<span class="profile-badge">${heightVal}</span>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// 🌐 외주 DB — 카드형
+function renderOutsourceCard_thumb(p) {
+  const catBadge = p.category
+    ? `<span class="profile-badge" style="background:#f0fdf4;color:#166534;border-color:#bbf7d0">${p.category}</span>` : '';
+  const phoneText = p.contact||p.phone||'';
+  return `<div class="thumb-card" onclick="openModelDetailModal('${p.id}')">
+    <div class="thumb-card-img">${_thumbImgHtml(p)}</div>
+    <div class="thumb-card-body">
+      <div class="thumb-card-name">${p.fullName||'이름 없음'}</div>
+      <div class="thumb-card-sub">${phoneText ? '📞 '+phoneText : (p.pay||p.fee||'')}</div>
+      <div class="thumb-card-badges">
+        ${statusBadgeHTML(p.id, p.status||'미정','9px')}
+        ${catBadge}
+      </div>
+    </div>
+  </div>`;
+}
+
+// 📸 스튜디오 DB — 카드형
+function renderStudioCard_thumb(p) {
+  const typeBadge = p.studioType
+    ? `<span class="profile-badge" style="background:#faf5ff;color:#6b21a8;border-color:#e9d5ff">${p.studioType}</span>` : '';
+  const addrText = (p.address||p.location||'').slice(0,20);
+  return `<div class="thumb-card" onclick="openModelDetailModal('${p.id}')">
+    <div class="thumb-card-img">${_thumbImgHtml(p)}</div>
+    <div class="thumb-card-body">
+      <div class="thumb-card-name">${p.fullName||'이름 없음'}</div>
+      <div class="thumb-card-sub">${addrText ? '📍 '+addrText : (p.price||p.fee||'')}</div>
+      <div class="thumb-card-badges">${typeBadge}</div>
+    </div>
+  </div>`;
+}
+
+// ⭐ 1차픽 / 최종누적 — 카드형 (클릭 시 상세 보기)
+function savedModelCard_thumb(p) {
+  const ratings = getRatings(p);
+  const avg     = getAverageRating(p);
+  const avgStr  = avg > 0 ? avg.toFixed(1) : '—';
+  const imgHtml = _thumbImgHtml(p);
+  const badgeSpans = profileBadgeSpans(p);
+  return `<div class="thumb-card" onclick="openModelDetailModal('${p.id}')">
+    <div class="thumb-card-img">${imgHtml}</div>
+    <div class="thumb-card-body">
+      <div class="thumb-card-name">@${p.username}</div>
+      <div class="thumb-card-sub">♥ ${fmtNum(p.likes)} · ⭐${avgStr}</div>
+      <div class="thumb-card-badges">${badgeSpans}</div>
+    </div>
+  </div>`;
 }
 
 // ── 아이 프로필 정보 추출 (캡션 + 프로필 소개글 통합 검색) ──
