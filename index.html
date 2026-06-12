@@ -361,6 +361,20 @@
   }
   .star.filled { color: #f59e0b; }
   .star:hover { transform: scale(1.25); color: #f59e0b; }
+
+  /* 카드형 전용 별점 — 세로 적층, 별 소형화 */
+  .thumb-card-rating {
+    border-top: 1px solid var(--gray-100);
+    padding: 7px 10px 8px;
+    background: var(--gray-50);
+  }
+  .thumb-card-rating .multi-rating {
+    flex-direction: column; align-items: flex-start; gap: 3px;
+  }
+  .thumb-card-rating .rating-name { font-size: 10px; min-width: 36px; }
+  .thumb-card-rating .star { font-size: 13px; }
+  .thumb-card-rating .star-rating { gap: 1px; }
+  .star:hover { transform: scale(1.25); color: #f59e0b; }
   .avg-badge {
     font-size: 13px; font-weight: 800;
     color: var(--gray-300); white-space: nowrap;
@@ -1317,7 +1331,10 @@ async function updateClothesSize(id, size) {
 
 // ── 갤러리 HTML 빌더 ──────────────────────────────────
 function galleryHTML(p) {
-  const images = Array.isArray(p.images) ? p.images : [];
+  // 레거시 imgUrl이 있는데 images 배열에 없으면 자동으로 첫 번째 요소로 추가 (화면 렌더 전용)
+  if (!Array.isArray(p.images)) p.images = [];
+  if (p.imgUrl && !p.images.includes(p.imgUrl)) p.images.unshift(p.imgUrl);
+  const images = p.images;
   return `<div class="detail-section">
     <div class="detail-section-title" style="display:flex;justify-content:space-between;align-items:center">
       📸 사진 갤러리
@@ -1626,8 +1643,16 @@ async function handlePhotoUpload(files) {
 
 async function deleteModelPhoto(id, index) {
   const model = savedModels.find(m => m.id === id);
-  if (!model || !model.images) return;
+  if (!model) return;
+  if (!Array.isArray(model.images)) model.images = [];
   model.images.splice(index, 1);
+  // 배열이 비면 imgUrl 찌꺼기도 함께 초기화
+  if (model.images.length === 0) {
+    model.imgUrl = '';
+  } else {
+    // 대표 사진(index 0)이 바뀌었을 수도 있으므로 imgUrl 동기화
+    model.imgUrl = model.images[0];
+  }
   const { error } = await db.from('saved_models').update({ post_data: { ...model } }).eq('id', id);
   if (error) { showToast('⚠️ 사진 삭제 실패: ' + (error.message||'')); return; }
   renderDetailView(model);
@@ -2235,17 +2260,37 @@ function renderStudioCard_thumb(p) {
 
 // ⭐ 1차픽 / 최종누적 — 카드형 (클릭 시 상세 보기)
 function savedModelCard_thumb(p) {
-  const ratings = getRatings(p);
-  const avg     = getAverageRating(p);
-  const avgStr  = avg > 0 ? avg.toFixed(1) : '—';
-  const imgHtml = _thumbImgHtml(p);
+  const ratings    = getRatings(p);
+  const avg        = getAverageRating(p);
+  const avgStr     = avg > 0 ? avg.toFixed(1) : '—';
+  const imgHtml    = _thumbImgHtml(p);
   const badgeSpans = profileBadgeSpans(p);
+
+  // 3명 별점 행 — 카드 전용 (stopPropagation으로 모달 오픈과 충돌 방지)
+  const ratingRows = REVIEWERS.map(reviewer => {
+    const score = ratings[reviewer] || 0;
+    const label = REVIEWER_LABELS[reviewer];
+    const stars = [1,2,3,4,5].map(n => {
+      const newScore = (n === score) ? 0 : n;
+      return `<span class="star ${n <= score ? 'filled' : ''}"
+        onclick="event.stopPropagation();updateRating('${p.id}','${reviewer}',${newScore})"
+        title="${n === score ? '초기화' : label+' '+n+'점'}">★</span>`;
+    }).join('');
+    return `<div class="rating-row">
+      <span class="rating-name">${label}</span>
+      <div class="star-rating">${stars}</div>
+    </div>`;
+  }).join('');
+
   return `<div class="thumb-card" onclick="openModelDetailModal('${p.id}')">
     <div class="thumb-card-img">${imgHtml}</div>
     <div class="thumb-card-body">
       <div class="thumb-card-name">@${p.username}</div>
       <div class="thumb-card-sub">♥ ${fmtNum(p.likes)} · ⭐${avgStr}</div>
       <div class="thumb-card-badges">${badgeSpans}</div>
+    </div>
+    <div class="thumb-card-rating" onclick="event.stopPropagation()">
+      <div class="multi-rating">${ratingRows}</div>
     </div>
   </div>`;
 }
