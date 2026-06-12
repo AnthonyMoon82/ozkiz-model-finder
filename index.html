@@ -1038,7 +1038,7 @@ function switchTab(tab) {
     document.getElementById('final-list').style.display = tab === 'final' ? '' : 'none';
     document.getElementById('saved-resultInfo').textContent =
       tab === 'pick' ? '📥 1차 픽' : '⭐ 최종 누적';
-    _syncSavedViewToggle();
+    _syncSavedViewToggle(tab); // pick or final 각자의 모드로 버튼 동기화
   }
 
   if (tab === 'pick')  renderPickTab();
@@ -1048,6 +1048,8 @@ function switchTab(tab) {
     // DB 탭 전환 시 검색어 초기화 (필터는 유지)
     dbSearchQuery = '';
     renderInternalDBTab(currentDbType);
+    // DB 필터 영역 재렌더 후 버튼 동기화 (renderInternalDBTab → _renderDbFilterArea 이후)
+    setTimeout(() => _syncDbViewToggle(currentDbType), 0);
   }
 }
 
@@ -1707,7 +1709,7 @@ function renderPickTab() {
   let picks = savedModels.filter(p => !isReadyForFinal(p) && !isInternalData(p));
   picks = applyProjectFilter(picks);
   updateTabBadges();
-  _syncSavedViewToggle();
+  _syncSavedViewToggle('pick');
 
   if (!picks.length) {
     document.getElementById('pick-list').innerHTML =
@@ -1715,7 +1717,7 @@ function renderPickTab() {
     return;
   }
 
-  if (dbViewMode === 'card') {
+  if (viewModes['pick'] === 'card') {
     document.getElementById('pick-list').innerHTML =
       `<div class="thumb-cards-grid">${picks.map(p => savedModelCard_thumb(p)).join('')}</div>`;
   } else {
@@ -1728,7 +1730,7 @@ function renderFinalTab() {
   let finals = savedModels.filter(p => isReadyForFinal(p) && !isInternalData(p));
   finals = applyProjectFilter(finals);
   updateTabBadges();
-  _syncSavedViewToggle();
+  _syncSavedViewToggle('final');
 
   if (!finals.length) {
     document.getElementById('final-list').innerHTML =
@@ -1736,7 +1738,7 @@ function renderFinalTab() {
     return;
   }
 
-  if (dbViewMode === 'card') {
+  if (viewModes['final'] === 'card') {
     document.getElementById('final-list').innerHTML =
       `<div class="thumb-cards-grid">${finals.map(p => savedModelCard_thumb(p)).join('')}</div>`;
   } else {
@@ -1744,12 +1746,23 @@ function renderFinalTab() {
   }
 }
 
-// saved-toolbar 토글 버튼 active 상태 동기화
-function _syncSavedViewToggle() {
-  const sl = document.getElementById('savedViewList');
-  const sc = document.getElementById('savedViewCard');
-  if (sl) sl.classList.toggle('active', dbViewMode !== 'card');
-  if (sc) sc.classList.toggle('active', dbViewMode === 'card');
+// saved-toolbar 토글 버튼 active 상태 동기화 (pick / final)
+function _syncSavedViewToggle(tabKey) {
+  const key  = tabKey || currentSidebarTab || 'pick';
+  const mode = viewModes[key] || 'list';
+  const sl   = document.getElementById('savedViewList');
+  const sc   = document.getElementById('savedViewCard');
+  if (sl) sl.classList.toggle('active', mode !== 'card');
+  if (sc) sc.classList.toggle('active', mode === 'card');
+}
+
+// DB 필터 영역 토글 버튼 active 상태 동기화 (model / outsource / studio)
+function _syncDbViewToggle(dbType) {
+  const mode = viewModes[dbType] || 'list';
+  const dl   = document.getElementById('dbViewList');
+  const dc   = document.getElementById('dbViewCard');
+  if (dl) dl.classList.toggle('active', mode !== 'card');
+  if (dc) dc.classList.toggle('active', mode === 'card');
 }
 
 // ── DB 탭 렌더링 ─────────────────────────────────────
@@ -1761,7 +1774,11 @@ let modelNationalityFilter  = ''; // 모델 DB 국적 필터
 let modelGenderFilter       = ''; // 모델 DB 성별 필터
 let modelCategoryFilter     = ''; // 모델 DB 카테고리 필터
 let dbSearchQuery           = ''; // DB 공통 검색어
-let dbViewMode = localStorage.getItem('ozkiz_db_view_mode') || 'list'; // 'list' | 'card'
+// 탭별 독립 뷰 모드 (pick/final/model/outsource/studio)
+let viewModes = (() => {
+  try { return JSON.parse(localStorage.getItem('ozkiz_view_modes')) || {}; } catch { return {}; }
+})();
+['pick','final','model','outsource','studio'].forEach(k => { if (!viewModes[k]) viewModes[k] = 'list'; });
 const OUTSOURCE_TYPES    = ['전체보기', ...OUTSOURCE_STEP_TYPES];
 const MODEL_NATIONALITIES= ['전체보기', '한국', '외국', '혼혈', 'AI'];
 const MODEL_GENDERS      = ['전체보기', '여아', '남아'];
@@ -1781,25 +1798,18 @@ function _syncBtnStyles(btnClass, currentFilterVal) {
 
 // ── 보기 모드 전환 ──────────────────────────────────────
 function setViewMode(mode) {
-  dbViewMode = mode;
-  localStorage.setItem('ozkiz_db_view_mode', mode);
+  // 현재 활성 탭 키 결정
+  const tabKey = (currentSidebarTab === 'pick' || currentSidebarTab === 'final')
+    ? currentSidebarTab
+    : currentDbType; // 'model' | 'outsource' | 'studio'
 
-  // saved-toolbar 버튼 동기화
-  const sl = document.getElementById('savedViewList');
-  const sc = document.getElementById('savedViewCard');
-  if (sl) sl.classList.toggle('active', mode === 'list');
-  if (sc) sc.classList.toggle('active', mode === 'card');
+  viewModes[tabKey] = mode;
+  localStorage.setItem('ozkiz_view_modes', JSON.stringify(viewModes));
 
-  // DB 필터 영역 버튼 동기화 (dbFilterArea 안에 있을 경우)
-  const dl = document.getElementById('dbViewList');
-  const dc = document.getElementById('dbViewCard');
-  if (dl) dl.classList.toggle('active', mode === 'list');
-  if (dc) dc.classList.toggle('active', mode === 'card');
-
-  // 현재 탭 즉시 재렌더
-  if (currentSidebarTab === 'pick')  renderPickTab();
-  else if (currentSidebarTab === 'final') renderFinalTab();
-  else renderDbListArea(currentDbType);
+  // 버튼 동기화 후 재렌더
+  if (currentSidebarTab === 'pick')  { _syncSavedViewToggle('pick');   renderPickTab();  }
+  else if (currentSidebarTab === 'final') { _syncSavedViewToggle('final'); renderFinalTab(); }
+  else { _syncDbViewToggle(currentDbType); renderDbListArea(currentDbType); }
 }
 
 function setOutsourceFilter(type) {
@@ -1927,8 +1937,8 @@ function _renderDbFilterArea(dbType) {
   // studio: 검색창만 있으면 충분
 
   // ── 보기 모드 토글 버튼 ──────────────────────────────
-  const listActive = dbViewMode !== 'card';
-  const cardActive = dbViewMode === 'card';
+  const listActive = viewModes[dbType] !== 'card';
+  const cardActive = viewModes[dbType] === 'card';
   html += `
     <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
       <div class="view-toggle-group" id="dbViewToggle">
@@ -2019,7 +2029,7 @@ function renderDbListArea(dbType) {
     return;
   }
 
-  if (dbViewMode === 'card') {
+  if (viewModes[dbType] === 'card') {
     el.innerHTML = countHtml +
       `<div class="thumb-cards-grid">${list.map(p => renderDbCard_thumb(p, dbType)).join('')}</div>`;
   } else {
