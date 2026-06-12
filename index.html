@@ -473,6 +473,10 @@
   .photo-thumb:hover img { transform:scale(1.05); }
   .photo-thumb .del-photo { position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.6);color:white;border:none;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s; }
   .photo-thumb:hover .del-photo { opacity:1; }
+  .photo-thumb .set-main-btn { position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.6);color:white;border:none;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s; }
+  .photo-thumb:hover .set-main-btn { opacity:1; }
+  .photo-thumb.is-main { outline:2.5px solid #f59e0b;outline-offset:-2px; }
+  .photo-thumb .main-badge { position:absolute;top:4px;left:4px;background:#f59e0b;color:white;font-size:9px;font-weight:800;padding:2px 5px;border-radius:4px;line-height:1.4;pointer-events:none; }
   .photo-upload-btn { aspect-ratio:1;border-radius:8px;border:2px dashed var(--gray-300);background:var(--gray-50);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--gray-400);font-size:11px;font-weight:600;transition:all .15s; }
   .photo-upload-btn:hover { border-color:var(--red);color:var(--red);background:var(--red-50); }
 
@@ -1324,8 +1328,12 @@ function galleryHTML(p) {
     </div>
     <div class="photo-gallery">
       ${images.map((url, i) => `
-        <div class="photo-thumb">
+        <div class="photo-thumb${i === 0 ? ' is-main' : ''}">
           <img src="${url}" alt="사진" onclick="window.open('${url}','_blank')">
+          ${i === 0
+            ? `<span class="main-badge">👑 대표</span>`
+            : `<button class="set-main-btn" title="대표 사진으로 지정"
+                onclick="event.stopPropagation();setMainThumbnail('${p.id}',${i})">👑</button>`}
           <button class="del-photo" onclick="event.stopPropagation();deleteModelPhoto('${p.id}',${i})">✕</button>
         </div>`).join('')}
       <div class="photo-upload-btn" onclick="document.getElementById('photoFileInput').click()">
@@ -1626,6 +1634,33 @@ async function deleteModelPhoto(id, index) {
   // 메인 목록 썸네일 실시간 동기화
   renderInternalDBTab(currentDbType);
   showToast('🗑️ 사진을 삭제했어요');
+}
+
+// ── 대표 사진(메인 썸네일) 변경 ────────────────────────
+async function setMainThumbnail(id, imageIndex) {
+  const model = savedModels.find(m => m.id === id);
+  if (!model || !Array.isArray(model.images) || imageIndex <= 0 || imageIndex >= model.images.length) return;
+
+  // 선택한 사진을 배열 맨 앞으로 이동
+  const [selected] = model.images.splice(imageIndex, 1);
+  model.images.unshift(selected);
+
+  // imgUrl 하위 호환 업데이트
+  model.imgUrl = selected;
+
+  const { error } = await db.from('saved_models').update({ post_data: { ...model } }).eq('id', id);
+  if (error) {
+    // 실패 시 원래 순서로 복원
+    model.images.shift();
+    model.images.splice(imageIndex, 0, selected);
+    model.imgUrl = model.images[0] || '';
+    showToast('⚠️ 대표 사진 변경 실패: ' + (error.message||''));
+    return;
+  }
+
+  renderDetailView(model);
+  renderInternalDBTab(currentDbType);
+  showToast('👑 대표 사진이 변경됐어요');
 }
 
 // ── 직접 등록 모달 ────────────────────────────────────
