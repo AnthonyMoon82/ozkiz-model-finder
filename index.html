@@ -458,14 +458,84 @@
   .db-model-card:hover { background:var(--gray-50) !important; }
 
   /* CSV 접기/펼치기 */
-  .csv-toggle-btn {
-    display:flex; align-items:center; gap:6px;
-    padding:7px 14px; background:var(--gray-50);
-    border:1.5px solid var(--gray-200); border-radius:var(--r-sm);
-    font-family:inherit; font-size:12px; font-weight:600;
-    color:var(--gray-600); cursor:pointer; transition:all .15s;
+  /* ── DB 탭 헤더 ─────────────────────────────────── */
+  .db-header {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--r-lg);
+    padding: 16px 20px;
+    margin-bottom: 14px;
+    box-shadow: var(--shadow-xs);
   }
-  .csv-toggle-btn:hover { border-color:var(--red); color:var(--red); background:var(--red-50); }
+  .db-header-top {
+    display: flex; align-items: center;
+    justify-content: space-between; gap: 12px;
+  }
+  .db-header-title {
+    font-size: 17px; font-weight: 800; color: var(--gray-900);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .db-header-count {
+    font-size: 12px; font-weight: 600;
+    color: var(--gray-400); background: var(--gray-100);
+    padding: 2px 8px; border-radius: 20px;
+  }
+  .db-header-actions {
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+  }
+  /* 기본 액션 버튼 */
+  .db-action-btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 7px 13px; border: none; border-radius: var(--r-sm);
+    font-family: inherit; font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
+  .db-action-btn.primary {
+    background: var(--red); color: white;
+  }
+  .db-action-btn.primary:hover { opacity: .88; }
+  .db-action-btn.secondary {
+    background: #eef2ff; color: #4338ca;
+  }
+  .db-action-btn.secondary:hover { background: #e0e7ff; }
+  /* ··· 더보기 버튼 */
+  .db-more-btn {
+    width: 32px; height: 32px; border: 1.5px solid var(--gray-200);
+    border-radius: var(--r-sm); background: white; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; color: var(--gray-500); transition: all .15s;
+    position: relative;
+  }
+  .db-more-btn:hover { border-color: var(--gray-400); color: var(--gray-700); }
+  /* 드롭다운 메뉴 */
+  .db-overflow-menu {
+    position: absolute; top: calc(100% + 6px); right: 0;
+    background: white; border: 1px solid var(--gray-200);
+    border-radius: var(--r-md); padding: 6px;
+    box-shadow: var(--shadow-md);
+    min-width: 200px; z-index: 200;
+    display: none;
+  }
+  .db-overflow-menu.open { display: block; }
+  .db-menu-item {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%; padding: 8px 12px; border: none;
+    background: transparent; border-radius: 8px;
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    color: var(--gray-700); cursor: pointer; text-align: left;
+    transition: background .12s;
+  }
+  .db-menu-item:hover { background: var(--gray-50); }
+  .db-menu-item.danger { color: #dc2626; }
+  .db-menu-item.danger:hover { background: #fff5f5; }
+  .db-menu-divider { height: 1px; background: var(--gray-100); margin: 4px 0; }
+  /* CSV 드롭존 (인라인 접기) */
+  .db-csv-zone {
+    overflow: hidden; transition: max-height .3s ease;
+    max-height: 0;
+  }
+  .db-csv-zone.open { max-height: 220px; }
+  .csv-toggle-btn { display: none; } /* 기존 버튼 숨김 */
   .csv-collapse { overflow:hidden; transition:max-height .3s ease; max-height:0; }
   .csv-collapse.open { max-height:300px; }
 
@@ -728,49 +798,65 @@
         <!-- 기존 모델 DB 탭 -->
         <div id="dbGrid" style="display:none">
 
-          <!-- DB 탭 타이틀 -->
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <div style="font-size:16px;font-weight:800;color:var(--gray-900)" id="dbTabTitle">🗂️ 모델 DB</div>
+          <!-- ── 새 DB 헤더 ── -->
+          <div class="db-header">
+            <div class="db-header-top">
+              <!-- 좌: 타이틀 + 카운트 뱃지 -->
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="db-header-title" id="dbTabTitle">🗂️ 모델 DB</span>
+                <span class="db-header-count" id="dbHeaderCount"></span>
+              </div>
+
+              <!-- 우: 액션 버튼 그룹 -->
+              <div class="db-header-actions">
+                <button class="db-action-btn primary" onclick="openManualAddModal()">
+                  + 직접 등록
+                </button>
+                <button class="db-action-btn secondary" id="syncNotionBtn" onclick="syncNotion()">
+                  🔄 동기화
+                </button>
+                <!-- ··· 더보기 -->
+                <div style="position:relative">
+                  <button class="db-more-btn" id="dbMoreBtn"
+                    onclick="event.stopPropagation();toggleDbMenu()" title="더 보기">···</button>
+                  <div class="db-overflow-menu" id="dbOverflowMenu">
+                    <button class="db-menu-item" onclick="closeDbMenu();toggleDbCSV()">
+                      📂 CSV 파일 업로드
+                    </button>
+                    <div class="db-menu-divider"></div>
+                    <button class="db-menu-item danger" onclick="closeDbMenu();deleteAllNotionData()">
+                      🚨 전체 데이터 삭제
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CSV 드롭존 (접기/펼치기) -->
+            <div class="db-csv-zone" id="dbCsvZone">
+              <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--gray-100)">
+                <div class="db-drop-zone" id="dbDropZone"
+                  onclick="document.getElementById('csvFileInput').click()"
+                  ondragover="event.preventDefault();this.classList.add('drag-over')"
+                  ondragleave="this.classList.remove('drag-over')"
+                  ondrop="event.preventDefault();this.classList.remove('drag-over');handleCSVFile(event.dataTransfer.files[0])">
+                  <div class="dz-icon">📂</div>
+                  <div class="dz-title">CSV 파일을 여기에 드래그하거나 클릭</div>
+                  <div class="dz-sub">노션 DB에서 내보낸 .csv 파일을 불러와 저장해요</div>
+                </div>
+                <div id="importProgress"></div>
+              </div>
+            </div>
+
+            <!-- 동기화 진행 결과 -->
+            <div id="syncResult"></div>
           </div>
 
-          <!-- 상단 액션 버튼 -->
-          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-            <button onclick="openManualAddModal()"
-              style="padding:10px 18px;background:var(--red);color:white;border:none;border-radius:var(--r-md);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
-              ＋ 새 모델 직접 등록
-            </button>
-            <button id="syncNotionBtn" onclick="syncNotion()"
-              style="padding:10px 16px;background:#6366f1;color:white;border:none;border-radius:var(--r-md);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:opacity .15s"
-              onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-              🔄 노션 데이터 동기화
-            </button>
-            <button onclick="deleteAllNotionData()"
-              style="padding:10px 14px;background:transparent;color:#dc2626;border:2px solid #fca5a5;border-radius:var(--r-md);font-family:inherit;font-size:11px;font-weight:700;cursor:pointer"
-              onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='transparent'">
-              🚨 내부 DB 데이터 전체 삭제
-            </button>
-          </div>
-          <!-- 노션 동기화 결과 메시지 -->
-          <div id="syncResult"></div>
-
-          <!-- CSV 업로드 (접기/펼치기) -->
+          <!-- CSV input (숨김) -->
           <input type="file" id="csvFileInput" accept=".csv" style="display:none"
             onchange="handleCSVFile(this.files[0])">
-          <button class="csv-toggle-btn" onclick="toggleCSVZone(this)">
-            <span>📂</span> 노션 CSV 파일 업로드하기 <span id="csvChevron">▾</span>
-          </button>
-          <div class="csv-collapse" id="csvCollapse">
-            <div class="db-drop-zone" id="dbDropZone" style="margin-top:8px"
-              onclick="document.getElementById('csvFileInput').click()"
-              ondragover="event.preventDefault();this.classList.add('drag-over')"
-              ondragleave="this.classList.remove('drag-over')"
-              ondrop="event.preventDefault();this.classList.remove('drag-over');handleCSVFile(event.dataTransfer.files[0])">
-              <div class="dz-icon">📂</div>
-              <div class="dz-title">CSV 파일을 여기에 드래그하거나 클릭</div>
-              <div class="dz-sub">노션 DB에서 내보낸 .csv 파일을 불러와 저장해요</div>
-            </div>
-            <div id="importProgress"></div>
-          </div>
+          <!-- 기존 csvCollapse 호환용 (hidden) -->
+          <div class="csv-collapse" id="csvCollapse" style="display:none"></div>
 
           <!-- 내부 DB 모델 목록 -->
           <div id="notionModelsList"></div>
@@ -1175,10 +1261,39 @@ const isInternalData = p => isNotionData(p) || isManualData(p);
 
 // ── CSV 접기/펼치기 ───────────────────────────────────
 function toggleCSVZone(btn) {
-  const zone = document.getElementById('csvCollapse');
-  const chevron = document.getElementById('csvChevron');
-  const isOpen = zone.classList.toggle('open');
-  chevron.textContent = isOpen ? '▴' : '▾';
+  // 레거시 호환용 — 새 UI에서는 toggleDbCSV() 사용
+  toggleDbCSV();
+}
+
+// ── DB 헤더 더보기 메뉴 ────────────────────────────────
+function toggleDbMenu() {
+  const menu = document.getElementById('dbOverflowMenu');
+  if (!menu) return;
+  const isOpen = menu.classList.toggle('open');
+  if (isOpen) {
+    // 외부 클릭 시 닫기 (1회성 리스너)
+    const close = (e) => {
+      if (!menu.contains(e.target)) { menu.classList.remove('open'); }
+      document.removeEventListener('click', close);
+    };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  }
+}
+function closeDbMenu() {
+  const menu = document.getElementById('dbOverflowMenu');
+  if (menu) menu.classList.remove('open');
+}
+function toggleDbCSV() {
+  const zone = document.getElementById('dbCsvZone');
+  if (zone) zone.classList.toggle('open');
+}
+
+// ── DB 헤더 카운트 뱃지 업데이트 ──────────────────────
+function updateDbHeaderCount(dbType) {
+  const el = document.getElementById('dbHeaderCount');
+  if (!el) return;
+  const count = savedModels.filter(p => isInternalData(p) && (p.db_type||'model') === dbType).length;
+  el.textContent = count ? `${count}명` : '';
 }
 
 // ── 모델 상세 팝업 ────────────────────────────────────
@@ -1888,6 +2003,7 @@ function setOutsourceFilter(type) {
 function renderInternalDBTab(dbType) {
   const titleEl = document.getElementById('dbTabTitle');
   if (titleEl) titleEl.textContent = DB_TYPE_LABEL[dbType] || '모델 DB';
+  updateDbHeaderCount(dbType);
 
   const container = document.getElementById('notionModelsList');
   if (!container) return;
@@ -2856,7 +2972,7 @@ async function syncNotion() {
     showToast('⚠️ 노션 동기화 실패: ' + e.message);
   } finally {
     btn.disabled  = false;
-    btn.innerHTML = '🔄 노션 데이터 동기화';
+    btn.innerHTML = '🔄 동기화';
   }
 }
 
