@@ -679,7 +679,7 @@
 
     <div class="nav-body">
       <div class="nav-group-label">캐스팅</div>
-      <button class="nav-btn active" id="nav-search" onclick="switchTab('search')">
+      <button class="nav-btn" id="nav-search" onclick="switchTab('search')">
         <span class="ni">🔍</span> 모델 검색
       </button>
       <button class="nav-btn" id="nav-pick" onclick="switchTab('pick')">
@@ -692,7 +692,7 @@
       </button>
 
       <div class="nav-group-label" style="margin-top:12px">데이터베이스</div>
-      <button class="nav-btn" id="nav-db" onclick="switchTab('db')">
+      <button class="nav-btn active" id="nav-db" onclick="switchTab('db')">
         <span class="ni">🗂️</span> 모델 DB
       </button>
       <button class="nav-btn" id="nav-outsource" onclick="switchTab('outsource')">
@@ -2990,6 +2990,9 @@ async function init() {
   updateTabBadges();
   renderPickTab();
   renderFinalTab();
+
+  // 첫 진입 화면 → 모델 DB
+  switchTab('db');
 }
 
 // ── 실시간 필터 적용 ─────────────────────────────────
