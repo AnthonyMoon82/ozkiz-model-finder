@@ -72,9 +72,9 @@ export default async function handler(req, res) {
 
   // 3개 DB ID 배열 (없는 항목은 null → 해당 dbIndex 스킵)
   const NOTION_DB_IDS = [
-    process.env.NOTION_DB_ID_MODEL     || process.env.NOTION_DB_ID || null,
-    process.env.NOTION_DB_ID_OUTSOURCE || null,
-    process.env.NOTION_DB_ID_STUDIO    || null,
+    process.env.NOTION_MODEL_DB_ID     || process.env.NOTION_DB_ID || null,
+    process.env.NOTION_OUTSOURCE_DB_ID || null,
+    process.env.NOTION_STUDIO_DB_ID    || null,
   ];
 
   if (!NOTION_TOKEN || !SUPABASE_URL || !SUPABASE_KEY) {
