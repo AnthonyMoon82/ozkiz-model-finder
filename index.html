@@ -665,6 +665,165 @@
   /* ── 스크롤바 ────────────────────────────────────── */
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 3px; }
+
+  /* ══════════════════════════════════════════════════
+     캐스팅 추천 탭
+  ══════════════════════════════════════════════════ */
+  .casting-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 14px;
+    height: calc(100vh - 110px);
+    min-height: 0;
+  }
+  .casting-panel {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-xs);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+  }
+  .casting-panel-hd {
+    padding: 13px 14px;
+    border-bottom: 1px solid var(--gray-100);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .casting-panel-hd-title {
+    font-size: 13px; font-weight: 800; color: var(--gray-800);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .casting-panel-body { flex: 1; overflow-y: auto; padding: 12px; }
+
+  /* 코디 썸네일 그리드 */
+  .coordi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .coordi-item {
+    border-radius: var(--r-md); overflow: hidden;
+    cursor: pointer; border: 2px solid transparent;
+    transition: border-color .15s, box-shadow .15s;
+    background: var(--gray-100);
+  }
+  .coordi-item:hover    { border-color: var(--gray-300); }
+  .coordi-item.active   { border-color: var(--red); box-shadow: 0 0 0 3px rgba(225,29,72,.1); }
+  .coordi-item-thumb    { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+  .coordi-item-name     {
+    padding: 5px 7px; font-size: 10px; font-weight: 700; color: var(--gray-700);
+    background: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .coordi-empty {
+    padding: 32px 16px; text-align: center;
+    color: var(--gray-400); font-size: 12px; line-height: 1.8;
+  }
+
+  /* AI 분석 결과 바 */
+  .ai-bar {
+    background: linear-gradient(135deg,#f0f4ff,#fdf2f8);
+    border: 1px solid #e0e7ff; border-radius: var(--r-md);
+    padding: 11px 14px; margin-bottom: 14px;
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  }
+  .ai-bar-label { font-size: 10px; font-weight: 700; color: #6366f1; margin-right: 2px; }
+  .ai-tag {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 700;
+  }
+  .ai-tag.gender { background: #fce7f3; color: #9d174d; }
+  .ai-tag.size   { background: #dbeafe; color: #1e40af; }
+  .ai-tag.style  { background: #f0fdf4; color: #166534; }
+  .ai-tag.color  { background: #fef9c3; color: #854d0e; }
+  .ai-tag.mood   { background: #f5f3ff; color: #5b21b6; }
+
+  /* 추천 섹션 */
+  .rec-section-title {
+    font-size: 13px; font-weight: 800; color: var(--gray-800);
+    margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+  }
+  .rec-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px; margin-bottom: 22px;
+  }
+  .rec-card {
+    background: white; border: 1px solid var(--gray-200);
+    border-radius: var(--r-md); overflow: hidden;
+    cursor: pointer; transition: box-shadow .15s, transform .15s;
+    box-shadow: var(--shadow-xs);
+  }
+  .rec-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+  .rec-card-img {
+    width: 100%; aspect-ratio: 3/4; background: var(--gray-100);
+    overflow: hidden; display: flex; align-items: center;
+    justify-content: center; font-size: 28px; position: relative;
+  }
+  .rec-card-img img { width: 100%; height: 100%; object-fit: cover; }
+  .match-badge {
+    position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,.72); color: white;
+    font-size: 9px; font-weight: 800; padding: 3px 7px;
+    border-radius: 20px; white-space: nowrap;
+    backdrop-filter: blur(4px);
+  }
+  .match-badge.high { background: rgba(5,150,105,.92); }
+  .match-badge.mid  { background: rgba(217,119,6,.92); }
+  .rec-card-body { padding: 7px 9px 9px; }
+  .rec-card-name {
+    font-size: 11px; font-weight: 700; color: var(--gray-900);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .rec-card-sub  { font-size: 10px; color: var(--gray-500); margin-top: 2px; }
+  .rec-card-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; }
+  .rec-tag       {
+    padding: 1px 5px; border-radius: 3px; font-size: 9px; font-weight: 700;
+    background: #f0fdf4; color: #166534;
+  }
+
+  /* 추천 빈 상태 */
+  .rec-empty {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 48px 24px; text-align: center;
+    color: var(--gray-400);
+  }
+  .rec-empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .rec-empty-title { font-size: 14px; font-weight: 700; color: var(--gray-600); margin-bottom: 6px; }
+  .rec-empty-sub   { font-size: 12px; line-height: 1.7; }
+
+  /* 코디 등록 모달 */
+  .coordi-modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.5);
+    display: none; align-items: center; justify-content: center;
+    z-index: 1000; padding: 20px;
+  }
+  .coordi-modal.open { display: flex; }
+  .coordi-modal-inner {
+    background: white; border-radius: var(--r-xl);
+    width: 100%; max-width: 500px; max-height: 90vh;
+    overflow-y: auto; padding: 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.2);
+  }
+  .coordi-drop-zone {
+    border: 2px dashed var(--gray-300); border-radius: var(--r-md);
+    padding: 28px 20px; text-align: center; cursor: pointer;
+    transition: all .15s; background: var(--gray-50);
+  }
+  .coordi-drop-zone:hover, .coordi-drop-zone.drag-over {
+    border-color: var(--red); background: var(--red-50);
+  }
+  .coordi-preview-grid {
+    display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; margin-top: 10px;
+  }
+  .coordi-preview-item {
+    aspect-ratio: 1; border-radius: 6px; overflow: hidden; background: var(--gray-100); position: relative;
+  }
+  .coordi-preview-item img { width: 100%; height: 100%; object-fit: cover; }
+  .coordi-preview-item .rm-btn {
+    position: absolute; top: 2px; right: 2px; width: 16px; height: 16px;
+    border-radius: 50%; background: rgba(0,0,0,.6); color: white;
+    border: none; cursor: pointer; font-size: 9px;
+    display: flex; align-items: center; justify-content: center;
+  }
 </style>
 </head>
 <body>
@@ -690,6 +849,9 @@
       </button>
 
       <div class="nav-group-label" style="margin-top:12px">캐스팅</div>
+      <button class="nav-btn" id="nav-casting" onclick="switchTab('casting')">
+        <span class="ni">✨</span> 캐스팅 추천
+      </button>
       <button class="nav-btn" id="nav-search" onclick="switchTab('search')">
         <span class="ni">🔍</span> 모델 검색
       </button>
@@ -861,8 +1023,101 @@
           <!-- 내부 DB 모델 목록 -->
           <div id="notionModelsList"></div>
         </div>
+
+        <!-- ✨ 캐스팅 추천 탭 -->
+        <div id="castingGrid" style="display:none">
+          <div class="casting-layout">
+
+            <!-- 왼쪽: 코디 레퍼런스 목록 -->
+            <div class="casting-panel">
+              <div class="casting-panel-hd">
+                <span class="casting-panel-hd-title">✨ 코디 레퍼런스</span>
+                <button onclick="openCoordiModal()"
+                  style="padding:5px 11px;background:var(--red);color:white;border:none;border-radius:var(--r-sm);font-family:inherit;font-size:11px;font-weight:700;cursor:pointer">
+                  + 등록
+                </button>
+              </div>
+              <div class="casting-panel-body">
+                <div id="coordiList">
+                  <div class="coordi-empty">
+                    🎨<br>아직 등록된 코디가 없어요<br>+ 등록 버튼으로 추가해 보세요
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 오른쪽: AI 추천 결과 -->
+            <div class="casting-panel">
+              <div class="casting-panel-hd">
+                <span class="casting-panel-hd-title">🤖 AI 추천 결과</span>
+                <span id="castingRecLabel"
+                  style="font-size:11px;color:var(--gray-400)">코디를 선택해 주세요</span>
+              </div>
+              <div class="casting-panel-body" id="castingRecommend">
+                <div class="rec-empty">
+                  <div class="rec-empty-icon">✨</div>
+                  <div class="rec-empty-title">왼쪽에서 코디를 선택하세요</div>
+                  <div class="rec-empty-sub">
+                    AI가 코디 스타일을 분석해서<br>어울리는 모델과 스튜디오를 추천해 드려요
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- 코디 등록 모달 -->
+<div class="coordi-modal" id="coordiModal" onclick="if(event.target===this)closeCoordiModal()">
+  <div class="coordi-modal-inner">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div style="font-size:16px;font-weight:800">🎨 촬영 코디 등록</div>
+      <button onclick="closeCoordiModal()"
+        style="width:30px;height:30px;border-radius:50%;border:none;background:var(--gray-100);cursor:pointer;font-size:16px;color:var(--gray-600)">✕</button>
+    </div>
+
+    <!-- 프로젝트명 -->
+    <div style="margin-bottom:16px">
+      <label style="font-size:12px;font-weight:700;color:var(--gray-600);display:block;margin-bottom:6px">
+        프로젝트명 <span style="color:var(--red)">*</span>
+      </label>
+      <input id="coordiProjectName" type="text" placeholder="예) 2026 S/S 룩북 스타일링"
+        style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-family:inherit;font-size:13px;outline:none;transition:border-color .15s"
+        onfocus="this.style.borderColor='var(--red)'" onblur="this.style.borderColor='var(--gray-200)'">
+    </div>
+
+    <!-- 이미지 드롭존 -->
+    <div style="margin-bottom:14px">
+      <label style="font-size:12px;font-weight:700;color:var(--gray-600);display:block;margin-bottom:6px">
+        코디 사진 <span style="font-size:10px;font-weight:400;color:var(--gray-400)">(최대 5장)</span>
+      </label>
+      <div class="coordi-drop-zone" id="coordiDropZone"
+        onclick="document.getElementById('coordiFileInput').click()"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="event.preventDefault();this.classList.remove('drag-over');handleCoordiDrop(event.dataTransfer.files)">
+        <div style="font-size:28px;margin-bottom:6px">📸</div>
+        <div style="font-size:13px;font-weight:700;color:var(--gray-600)">사진을 드래그하거나 클릭</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:3px">JPG, PNG 지원</div>
+      </div>
+      <input type="file" id="coordiFileInput" accept="image/*" multiple style="display:none"
+        onchange="handleCoordiDrop(this.files)">
+      <div class="coordi-preview-grid" id="coordiPreviews"></div>
+    </div>
+
+    <!-- 분석 진행 상태 -->
+    <div id="coordiAnalyzeStatus" style="display:none;margin-bottom:12px;padding:10px 14px;background:#f0f4ff;border-radius:var(--r-sm);font-size:12px;color:#4338ca;font-weight:600"></div>
+
+    <!-- 등록 버튼 -->
+    <button id="coordiSubmitBtn" onclick="submitCoordi()"
+      style="width:100%;padding:12px;background:var(--red);color:white;border:none;border-radius:var(--r-md);font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;transition:opacity .15s"
+      onmouseover="this.style.opacity='.88'" onmouseout="this.style.opacity='1'">
+      🤖 분석 및 등록
+    </button>
   </div>
 </div>
 
@@ -1121,21 +1376,23 @@ function switchTab(tab) {
   currentSidebarTab = tab;
 
   // 내비 버튼 활성화
-  ['search','pick','final','db','outsource','studio'].forEach(t => {
+  ['search','pick','final','db','outsource','studio','casting'].forEach(t => {
     const btn = document.getElementById(`nav-${t}`);
     if (btn) btn.classList.toggle('active', t === tab);
   });
 
-  const isSearch = tab === 'search';
-  const isSaved  = tab === 'pick' || tab === 'final';
-  const isDBTab  = ['db','outsource','studio'].includes(tab);
+  const isSearch  = tab === 'search';
+  const isSaved   = tab === 'pick' || tab === 'final';
+  const isDBTab   = ['db','outsource','studio'].includes(tab);
+  const isCasting = tab === 'casting';
 
   document.getElementById('search-panel').classList.toggle('hidden', !isSearch);
-  document.getElementById('search-toolbar').style.display  = isSearch ? '' : 'none';
-  document.getElementById('saved-toolbar').style.display   = isSaved  ? '' : 'none';
-  document.getElementById('cardsGrid').style.display       = isSearch ? '' : 'none';
-  document.getElementById('savedModelsGrid').style.display = isSaved  ? '' : 'none';
-  document.getElementById('dbGrid').style.display          = isDBTab  ? '' : 'none';
+  document.getElementById('search-toolbar').style.display  = isSearch  ? '' : 'none';
+  document.getElementById('saved-toolbar').style.display   = isSaved   ? '' : 'none';
+  document.getElementById('cardsGrid').style.display       = isSearch  ? '' : 'none';
+  document.getElementById('savedModelsGrid').style.display = isSaved   ? '' : 'none';
+  document.getElementById('dbGrid').style.display          = isDBTab   ? '' : 'none';
+  document.getElementById('castingGrid').style.display     = isCasting ? '' : 'none';
 
   if (isSaved) {
     document.getElementById('pick-list').style.display  = tab === 'pick'  ? '' : 'none';
@@ -1155,6 +1412,7 @@ function switchTab(tab) {
     // DB 필터 영역 재렌더 후 버튼 동기화 (renderInternalDBTab → _renderDbFilterArea 이후)
     setTimeout(() => _syncDbViewToggle(currentDbType), 0);
   }
+  if (isCasting) renderCoordiList();
 }
 
 // 현재 활성 저장 탭 재렌더 (프로젝트 필터 변경 시 호출)
@@ -2973,6 +3231,331 @@ async function syncNotion() {
   } finally {
     btn.disabled  = false;
     btn.innerHTML = '🔄 동기화';
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  ✨ 캐스팅 추천 — 전체 로직
+// ══════════════════════════════════════════════════════
+
+let coordiList      = [];      // saved_coordis 로컬 캐시
+let activeCoordiId  = null;    // 현재 선택된 코디
+let coordiModalFiles = [];     // 모달에서 선택된 File[]
+
+// ── Supabase 코디 목록 로드 ────────────────────────────
+async function loadCoordiList() {
+  try {
+    const { data, error } = await db.from('saved_coordis')
+      .select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    coordiList = (data || []).map(row => ({
+      id:           row.id,
+      projectName:  row.project_name,
+      imageUrls:    row.image_urls   || [],
+      analysis:     row.ai_analysis  || {},
+      createdAt:    row.created_at,
+    }));
+  } catch (e) {
+    console.warn('[coordi] DB 로드 실패:', e.message);
+    coordiList = [];
+  }
+}
+
+// ── 코디 목록 렌더링 (왼쪽 패널) ─────────────────────
+async function renderCoordiList() {
+  await loadCoordiList();
+  const el = document.getElementById('coordiList');
+  if (!el) return;
+  if (!coordiList.length) {
+    el.innerHTML = `<div class="coordi-empty">🎨<br>아직 등록된 코디가 없어요<br>+ 등록 버튼으로 추가해 보세요</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="coordi-grid">
+    ${coordiList.map(c => {
+      const thumb = c.imageUrls[0] || '';
+      const isActive = c.id === activeCoordiId;
+      return `<div class="coordi-item${isActive?' active':''}" onclick="selectCoordi('${c.id}')">
+        ${thumb
+          ? `<img class="coordi-item-thumb" src="${thumb}" alt="" onerror="this.style.display='none'">`
+          : `<div style="width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:28px;background:var(--gray-100)">🎨</div>`}
+        <div class="coordi-item-name">${c.projectName}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ── 코디 선택 → 매칭 계산 → 추천 렌더링 ──────────────
+function selectCoordi(id) {
+  activeCoordiId = id;
+  // 선택 스타일 갱신
+  document.querySelectorAll('.coordi-item').forEach(el => {
+    el.classList.toggle('active', el.onclick?.toString().includes(`'${id}'`));
+  });
+  // 직접 DOM 갱신 (onclick string 비교 대신 data 속성 활용)
+  document.querySelectorAll('.coordi-item').forEach(el => {
+    const match = el.getAttribute('onclick')?.match(/'([^']+)'/);
+    if (match) el.classList.toggle('active', match[1] === id);
+  });
+
+  const coordi = coordiList.find(c => c.id === id);
+  if (!coordi) return;
+
+  const label = document.getElementById('castingRecLabel');
+  if (label) label.textContent = coordi.projectName;
+
+  renderRecommendations(coordi);
+}
+
+// ── 매칭 점수 계산 ─────────────────────────────────────
+function calcModelScore(model, analysis) {
+  let score = 0;
+  const reasons = [];
+
+  // 1. 성별 매칭 (+50)
+  const mg = (model.gender || '').trim();
+  const pg = analysis.predictedGender || '';
+  const genderOk =
+    (pg === '여아' && (mg === '여' || mg === '여아')) ||
+    (pg === '남아' && (mg === '남' || mg === '남아'));
+  if (genderOk) { score += 50; reasons.push('성별 일치'); }
+
+  // 2. 사이즈/키 매칭 (+30)
+  const pSize = parseInt(analysis.predictedSize) || 0;
+  const mHeight = parseInt(model.height) || 0;
+  if (pSize > 0 && mHeight > 0 && mHeight >= pSize - 10 && mHeight <= pSize + 10) {
+    score += 30; reasons.push(`키 ${mHeight}cm`);
+  }
+
+  // 3. 스타일 태그 매칭 (겹치는 개수 × 10)
+  const pStyles = Array.isArray(analysis.styleTags) ? analysis.styleTags : [];
+  const mStyles = Array.isArray(model.styleTags)
+    ? model.styleTags
+    : (model.style ? model.style.split(',').map(s => s.trim()) : []);
+  const hits = pStyles.filter(s => mStyles.some(ms => ms.includes(s) || s.includes(ms)));
+  score += hits.length * 10;
+  if (hits.length) reasons.push(`스타일 ${hits.length}개 매칭`);
+
+  const maxScore = 50 + 30 + pStyles.length * 10 || 1;
+  const pct = Math.min(Math.round(score / maxScore * 100), 99);
+  return { score, pct, reasons };
+}
+
+function calcStudioScore(studio, analysis) {
+  let score = 0;
+  const reasons = [];
+
+  const pStyles  = Array.isArray(analysis.styleTags) ? analysis.styleTags : [];
+  const sStyles  = Array.isArray(studio.styleTags) ? studio.styleTags
+    : (studio.style ? studio.style.split(',').map(s => s.trim()) : []);
+  const concepts = parseConcepts(studio.concept || '');
+  const allTags  = [...sStyles, ...concepts];
+
+  const hits = pStyles.filter(s => allTags.some(t => t.includes(s) || s.includes(t)));
+  score += hits.length * 15;
+  if (hits.length) reasons.push(`스타일 ${hits.length}개 매칭`);
+
+  if (studio.address || studio.location) { score += 5; reasons.push('위치 정보 있음'); }
+
+  const maxScore = pStyles.length * 15 + 5 || 1;
+  const pct = Math.min(Math.round(score / maxScore * 100), 99);
+  return { score, pct, reasons };
+}
+
+// ── 추천 결과 렌더링 (오른쪽 패널) ───────────────────
+function renderRecommendations(coordi) {
+  const el = document.getElementById('castingRecommend');
+  if (!el) return;
+  const analysis = coordi.analysis || {};
+
+  // AI 분석 바
+  const pStyles = Array.isArray(analysis.styleTags) ? analysis.styleTags : [];
+  const pColors = Array.isArray(analysis.dominantColors) ? analysis.dominantColors : [];
+  const pMoods  = Array.isArray(analysis.moodKeywords) ? analysis.moodKeywords : [];
+
+  const aiBar = (analysis.predictedGender || pStyles.length) ? `
+    <div class="ai-bar">
+      <span class="ai-bar-label">AI 분석</span>
+      ${analysis.predictedGender ? `<span class="ai-tag gender">👤 ${analysis.predictedGender}</span>` : ''}
+      ${analysis.predictedSize   ? `<span class="ai-tag size">📏 ${analysis.predictedSize}호</span>` : ''}
+      ${pStyles.map(s => `<span class="ai-tag style">✦ ${s}</span>`).join('')}
+      ${pColors.map(c => `<span class="ai-tag color">● ${c}</span>`).join('')}
+      ${pMoods.map(m  => `<span class="ai-tag mood">${m}</span>`).join('')}
+    </div>` : '';
+
+  // 모델 Top 5
+  const models = savedModels.filter(p => isInternalData(p) && (p.db_type || 'model') === 'model');
+  const scoredModels = models
+    .map(m => ({ ...m, _match: calcModelScore(m, analysis) }))
+    .sort((a, b) => b._match.score - a._match.score)
+    .slice(0, 5);
+
+  const modelCards = scoredModels.map(m => {
+    const { pct, reasons } = m._match;
+    const thumb = (Array.isArray(m.images) && m.images[0]) || m.imgUrl || '';
+    const badgeCls = pct >= 70 ? 'high' : pct >= 40 ? 'mid' : '';
+    const styleHint = reasons.join(' · ');
+    return `<div class="rec-card" onclick="openModelDetailModal('${m.id}')">
+      <div class="rec-card-img">
+        ${thumb ? `<img src="${thumb}" onerror="this.onerror=null;this.parentElement.innerHTML='👤'">` : '👤'}
+        <span class="match-badge ${badgeCls}">${pct}% 매칭</span>
+      </div>
+      <div class="rec-card-body">
+        <div class="rec-card-name">${m.fullName || m.username || '—'}</div>
+        <div class="rec-card-sub">${m.height ? m.height+'cm' : ''} ${m.clothesSize || ''}</div>
+        ${styleHint ? `<div class="rec-card-tags"><span class="rec-tag">${styleHint}</span></div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // 스튜디오 Top 3
+  const studios = savedModels.filter(p => isInternalData(p) && p.db_type === 'studio');
+  const scoredStudios = studios
+    .map(s => ({ ...s, _match: calcStudioScore(s, analysis) }))
+    .sort((a, b) => b._match.score - a._match.score)
+    .slice(0, 3);
+
+  const studioCards = scoredStudios.map(s => {
+    const { pct, reasons } = s._match;
+    const thumb = (Array.isArray(s.images) && s.images[0]) || s.imgUrl || '';
+    const badgeCls = pct >= 70 ? 'high' : pct >= 40 ? 'mid' : '';
+    const hint = reasons.join(' · ');
+    return `<div class="rec-card" onclick="openModelDetailModal('${s.id}')">
+      <div class="rec-card-img" style="aspect-ratio:4/3">
+        ${thumb ? `<img src="${thumb}" onerror="this.onerror=null;this.parentElement.innerHTML='📸'">` : '📸'}
+        <span class="match-badge ${badgeCls}">${pct}% 매칭</span>
+      </div>
+      <div class="rec-card-body">
+        <div class="rec-card-name">${s.fullName || '이름 없음'}</div>
+        <div class="rec-card-sub">${(s.address||s.location||'').slice(0,20)}</div>
+        ${hint ? `<div class="rec-card-tags"><span class="rec-tag">${hint}</span></div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    ${aiBar}
+    ${scoredModels.length ? `
+      <div class="rec-section-title">👤 추천 모델 Top ${scoredModels.length}</div>
+      <div class="rec-grid">${modelCards}</div>` : ''}
+    ${scoredStudios.length ? `
+      <div class="rec-section-title">📸 추천 스튜디오 Top ${scoredStudios.length}</div>
+      <div class="rec-grid">${studioCards}</div>` : ''}
+    ${!scoredModels.length && !scoredStudios.length ? `
+      <div class="rec-empty">
+        <div class="rec-empty-icon">🔍</div>
+        <div class="rec-empty-title">매칭 가능한 데이터가 없어요</div>
+        <div class="rec-empty-sub">모델 DB와 스튜디오 DB에 데이터를 먼저 등록해 주세요</div>
+      </div>` : ''}`;
+}
+
+// ── 코디 등록 모달 ─────────────────────────────────────
+function openCoordiModal() {
+  coordiModalFiles = [];
+  document.getElementById('coordiProjectName').value = '';
+  document.getElementById('coordiPreviews').innerHTML = '';
+  document.getElementById('coordiAnalyzeStatus').style.display = 'none';
+  document.getElementById('coordiSubmitBtn').disabled = false;
+  document.getElementById('coordiSubmitBtn').textContent = '🤖 분석 및 등록';
+  document.getElementById('coordiModal').classList.add('open');
+}
+function closeCoordiModal() {
+  document.getElementById('coordiModal').classList.remove('open');
+}
+
+function handleCoordiDrop(files) {
+  const newFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+  coordiModalFiles = [...coordiModalFiles, ...newFiles].slice(0, 5);
+  renderCoordiPreviews();
+}
+
+function renderCoordiPreviews() {
+  const el = document.getElementById('coordiPreviews');
+  el.innerHTML = coordiModalFiles.map((f, i) => {
+    const url = URL.createObjectURL(f);
+    return `<div class="coordi-preview-item">
+      <img src="${url}">
+      <button class="rm-btn" onclick="removeCoordiFile(${i})" title="제거">✕</button>
+    </div>`;
+  }).join('');
+}
+function removeCoordiFile(idx) {
+  coordiModalFiles.splice(idx, 1);
+  renderCoordiPreviews();
+}
+
+function setCoordiStatus(msg) {
+  const el = document.getElementById('coordiAnalyzeStatus');
+  el.style.display = msg ? '' : 'none';
+  el.textContent = msg;
+}
+
+async function uploadCoordiImages(files) {
+  const urls = [];
+  for (const file of files) {
+    const ext  = file.name.split('.').pop().toLowerCase() || 'jpg';
+    const path = `coordi/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+    const { error } = await db.storage
+      .from('model-photos').upload(path, file, { contentType: file.type, upsert: false });
+    if (!error) {
+      const { data: { publicUrl } } = db.storage.from('model-photos').getPublicUrl(path);
+      urls.push(publicUrl);
+    }
+  }
+  return urls;
+}
+
+async function submitCoordi() {
+  const projectName = document.getElementById('coordiProjectName').value.trim();
+  if (!projectName) { showToast('⚠️ 프로젝트명을 입력해 주세요'); return; }
+  if (!coordiModalFiles.length) { showToast('⚠️ 사진을 1장 이상 추가해 주세요'); return; }
+
+  const btn = document.getElementById('coordiSubmitBtn');
+  btn.disabled = true;
+
+  try {
+    // 1. 이미지 업로드
+    setCoordiStatus('📤 사진 업로드 중...');
+    const imageUrls = await uploadCoordiImages(coordiModalFiles);
+    if (!imageUrls.length) throw new Error('이미지 업로드에 실패했습니다');
+
+    // 2. AI 분석
+    setCoordiStatus('🤖 AI 분석 중... (10~20초 소요)');
+    let analysis = {};
+    try {
+      const res  = await fetch('/api/analyze-coordi', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ imageUrls }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) analysis = data.analysis;
+      else console.warn('[coordi] AI 분석 응답 오류:', data.error);
+    } catch (e) {
+      console.warn('[coordi] AI 분석 실패 (저장은 계속):', e.message);
+    }
+
+    // 3. Supabase 저장
+    setCoordiStatus('💾 저장 중...');
+    const { error: dbErr } = await db.from('saved_coordis').insert({
+      id:           `coordi_${Date.now()}`,
+      project_name: projectName,
+      image_urls:   imageUrls,
+      ai_analysis:  analysis,
+    });
+    if (dbErr) throw new Error(dbErr.message);
+
+    closeCoordiModal();
+    showToast('✅ 코디가 등록됐어요!');
+    await renderCoordiList();
+
+    // 방금 등록한 코디 자동 선택
+    if (coordiList.length) selectCoordi(coordiList[0].id);
+
+  } catch (e) {
+    showToast('⚠️ 등록 실패: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '🤖 분석 및 등록';
+    setCoordiStatus('');
   }
 }
 
