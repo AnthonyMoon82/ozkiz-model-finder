@@ -37,8 +37,8 @@
 
 export const config = { maxDuration: 60 };
 
-const { Client }       = require('@notionhq/client');
-const { createClient } = require('@supabase/supabase-js');
+import { Client }       from '@notionhq/client';
+import { createClient } from '@supabase/supabase-js';
 
 const BUCKET = 'model-photos';
 const FOLDER = 'notion_sync';
