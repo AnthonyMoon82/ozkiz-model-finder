@@ -1,10 +1,8 @@
 {
   "functions": {
-    "api/sync-notion.js": {
-      "maxDuration": 60
-    },
-    "api/search.js": {
-      "maxDuration": 120
-    }
+    "api/sync-notion.js":    { "maxDuration": 60  },
+    "api/search.js":         { "maxDuration": 120 },
+    "api/analyze-coordi.js":  { "maxDuration": 60  },
+    "api/analyze-outfit.js":  { "maxDuration": 60  }
   }
 }
