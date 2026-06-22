@@ -1661,7 +1661,8 @@ function sanitizeFootSize(raw) {
 function sanitizeClothesSize(raw) {
   if (!raw || raw === '—') return '';
   let s = String(raw).trim();
-  if (!s.includes('호') && !isNaN(parseInt(s))) s += '호';
+  // 숫자만 있는 경우 '호' 자동 추가 (예: '120' → '120호')
+  if (!s.includes('호') && /^\d+$/.test(s)) s += '호';
   return s;
 }
 
@@ -1870,7 +1871,8 @@ function renderModelDetail(p, f, avatar, images) {
   const weightVal= sanitizeWeight(p.weight || sp.weight);
   const birthVal = p.birthDate || p.birthYear || sp.birth || '—';
   const footVal  = sanitizeFootSize(p.footSize || p.shoeSize || sp.footSize);
-  const igUrl    = p.username && p.username!=='알수없음' ? `https://www.instagram.com/${p.username}/` : '';
+  const _igHandle = (p.username || '').replace(/[\/@\s]+$/, '').replace(/^@/, '').trim();
+  const igUrl    = _igHandle && _igHandle !== '알수없음' ? `https://www.instagram.com/${_igHandle}/` : '';
   const memoText = [p.memo||p.comment, p.caption].filter(Boolean).join('\n\n').trim();
 
   document.getElementById('detailModalBody').innerHTML = `
@@ -1911,7 +1913,7 @@ function renderModelDetail(p, f, avatar, images) {
         ${f('촬영일', p.shootDate||'—', null, 'shootDate')}
         ${f('촬영료', p.fee||'—', null, 'fee')}
         ${f('카테고리', p.category||'—', null, 'category')}
-        ${f('인스타그램', igUrl ? '@'+p.username : '—', igUrl, 'username')}
+        ${f('인스타그램', igUrl ? '@'+_igHandle : '—', igUrl, 'username')}
       </div>
     </div>
     ${memoText ? `<div class="detail-section"><div class="detail-section-title">📝 메모</div><div class="detail-memo">${memoText}</div></div>` : ''}
@@ -1920,7 +1922,8 @@ function renderModelDetail(p, f, avatar, images) {
 }
 
 function renderOutsourceDetail(p, f, avatar) {
-  const igUrl    = p.username && p.username!=='알수없음' ? `https://www.instagram.com/${p.username}/` : '';
+  const _igHandle = (p.username || '').replace(/[\/@\s]+$/, '').replace(/^@/, '').trim();
+  const igUrl    = _igHandle && _igHandle !== '알수없음' ? `https://www.instagram.com/${_igHandle}/` : '';
   const memoText = (p.memo||p.comment||'').trim();
   document.getElementById('detailModalBody').innerHTML = `
     <div class="detail-profile-top">
@@ -1941,7 +1944,7 @@ function renderOutsourceDetail(p, f, avatar) {
         ${f('연락', p.contact||p.phone||'—', null, 'contact')}
         ${f('시간당 페이', p.pay||p.fee||'—', null, 'pay')}
         ${f('마지막 촬영일', p.lastShootDate||p.shootDate||'—', null, 'lastShootDate')}
-        ${f('인스타그램', igUrl ? '@'+p.username : '—', igUrl, 'username')}
+        ${f('인스타그램', igUrl ? '@'+_igHandle : '—', igUrl, 'username')}
       </div>
     </div>
     ${memoText ? `<div class="detail-section"><div class="detail-section-title">💬 코멘트</div><div class="detail-memo">${memoText}</div></div>` : ''}
