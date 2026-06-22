@@ -8,7 +8,7 @@
  * POST { images: [{ base64: string, mimeType: string }, ...] }  ← 다중 이미지 배열
  * → { success: true, analysis: { targetGender, targetSize, styleTags, conceptSuggestion } }
  *
- * 모델: gemini-1.5-flash (다중 이미지 종합 분석에 최적화)
+ * 모델: gemini-3.5-flash (다중 이미지 종합 분석에 최적화)
  */
 
 export const config = { maxDuration: 60 };
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
 
   try {
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_KEY}`,
       {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
