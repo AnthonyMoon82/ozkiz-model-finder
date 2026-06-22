@@ -1013,7 +1013,7 @@
                 <button class="db-action-btn primary" onclick="openManualAddModal()">
                   + 직접 등록
                 </button>
-                <button class="db-action-btn secondary" id="syncNotionBtn" onclick="syncNotion()">
+                <button class="db-action-btn secondary" id="syncNotionBtn" onclick="syncSingleDB(currentDbTypeIndex())">
                   🔄 동기화
                 </button>
                 <!-- ··· 더보기 -->
@@ -2334,6 +2334,13 @@ function renderInternalDBTab(dbType) {
   if (titleEl) titleEl.textContent = DB_TYPE_LABEL[dbType] || '모델 DB';
   updateDbHeaderCount(dbType);
 
+  // 탭 전환 시 이전 DB의 동기화 결과 초기화
+  const syncResult = document.getElementById('syncResult');
+  if (syncResult && syncResult.dataset.dbtype !== dbType) {
+    syncResult.innerHTML = '';
+    syncResult.dataset.dbtype = dbType;
+  }
+
   const container = document.getElementById('notionModelsList');
   if (!container) return;
 
@@ -3191,114 +3198,99 @@ async function handleCSVFile(file) {
 }
 
 // ── Notion API 동기화 (프론트엔드 주도 청킹) ─────────────
-async function syncNotion() {
+// ── 현재 DB 탭의 dbIndex 반환 (0=모델, 1=외주, 2=스튜디오) ──
+function currentDbTypeIndex() {
+  return { model: 0, outsource: 1, studio: 2 }[currentDbType] || 0;
+}
+
+// ── 개별 DB 단독 동기화 ────────────────────────────────
+async function syncSingleDB(dbIndex) {
+  const DB_LABELS = ['🗂️ 모델 DB', '🌐 외주 DB', '📸 스튜디오 DB'];
+  const label  = DB_LABELS[dbIndex] || `DB ${dbIndex}`;
   const btn    = document.getElementById('syncNotionBtn');
   const result = document.getElementById('syncResult');
 
   btn.disabled  = true;
   btn.innerHTML = '⏳ 동기화 중...';
 
-  const DB_LABELS = ['🗂️ 모델 DB', '🌐 외주 DB', '📸 스튜디오 DB'];
+  let upserted = 0, images = 0, failed = 0, batches = 0;
+  let cursor  = null;
+  let hasMore = true;
 
-  // 누적 집계
-  let totalUpserted = 0, totalImages = 0, totalFailed = 0, totalBatches = 0;
-
-  // ── 진행 상태 UI 업데이트 헬퍼 ─────────────────────────
-  function showProgress(dbIndex, batchMsg) {
-    const dbSteps = DB_LABELS.map((label, i) => {
-      if (i < dbIndex)  return `<span style="color:#10b981;font-weight:700">✅ ${label}</span>`;
-      if (i === dbIndex) return `<span style="color:#6366f1;font-weight:700">🔄 ${label}</span>`;
-      return `<span style="color:var(--gray-300)">${label}</span>`;
-    }).join('<span style="color:var(--gray-300);margin:0 6px">→</span>');
-
+  // ── 진행 상태 UI ──────────────────────────────────────
+  function showProgress(msg) {
     result.innerHTML = `
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:var(--r-md);padding:14px 16px">
-        <div style="font-size:11px;color:#3b82f6;margin-bottom:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          ${dbSteps}
+        <div style="font-size:12px;font-weight:700;color:#3b82f6;margin-bottom:6px">
+          🔄 ${label} 동기화 중...
         </div>
-        <div style="font-size:12px;color:var(--gray-600);margin-bottom:6px">${batchMsg}</div>
+        <div style="font-size:12px;color:var(--gray-600);margin-bottom:8px">${msg}</div>
         <div style="display:flex;gap:16px;font-size:12px;font-weight:700">
-          <span style="color:#1e40af">💾 저장 <strong>${totalUpserted}</strong>건</span>
-          <span style="color:#7c3aed">🖼️ 이미지 <strong>${totalImages}</strong>장</span>
-          ${totalFailed > 0 ? `<span style="color:#dc2626">❌ 실패 <strong>${totalFailed}</strong>건</span>` : ''}
+          <span style="color:#1e40af">💾 저장 <strong>${upserted}</strong>건</span>
+          <span style="color:#7c3aed">🖼️ 이미지 <strong>${images}</strong>장</span>
+          ${failed > 0 ? `<span style="color:#dc2626">❌ 실패 <strong>${failed}</strong>건</span>` : ''}
         </div>
       </div>`;
   }
 
   try {
-    // ── dbIndex 0→1→2 순서로 각 DB 전체를 페이지네이션 처리 ──
-    for (let dbIndex = 0; dbIndex < 3; dbIndex++) {
-      let cursor  = null;
-      let hasMore = true;
-      let dbBatch = 0;
+    while (hasMore) {
+      batches++;
+      showProgress(`배치 ${batches}회차 요청 중...`);
 
-      while (hasMore) {
-        dbBatch++;
-        totalBatches++;
-        showProgress(dbIndex, `${DB_LABELS[dbIndex]} — 배치 ${dbBatch}회차 요청 중...`);
+      const res = await fetch('/api/sync-notion', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ dbIndex, cursor }),
+      });
 
-        const res = await fetch('/api/sync-notion', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ dbIndex, cursor }),
-        });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
 
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+      upserted += (data.upserted || 0);
+      images   += (data.imagesOK || 0);
+      failed   += (data.failed   || 0);
+      hasMore   = data.has_more;
+      cursor    = data.next_cursor || null;
 
-        // 누적
-        totalUpserted += (data.upserted     || 0);
-        totalImages   += (data.imagesOK     || 0);
-        totalFailed   += (data.failed       || 0);
+      showProgress(
+        `배치 ${batches}회차 완료 (${data.upserted}건 저장, 이미지 ${data.imagesOK}장)` +
+        (hasMore ? ' · 다음 배치 준비 중...' : ' · 완료 ✅')
+      );
 
-        hasMore = data.has_more;
-        cursor  = data.next_cursor || null;
-
-        showProgress(
-          dbIndex,
-          `${DB_LABELS[dbIndex]} — 배치 ${dbBatch}회차 완료 (${data.upserted}건 저장, 이미지 ${data.imagesOK}장)${hasMore ? ' · 다음 배치 준비 중...' : ' · DB 완료 ✅'}`
-        );
-
-        // 서버 부하 분산 — 다음 배치 전 짧은 대기
-        if (hasMore) await new Promise(r => setTimeout(r, 300));
-      }
+      if (hasMore) await new Promise(r => setTimeout(r, 300));
     }
 
-    // ── 전체 완료 → 로컬 캐시 갱신 ─────────────────────
+    // ── 완료 → 로컬 캐시 갱신 ────────────────────────────
     savedModels = await loadSavedFromDB();
     savedIds    = new Set(savedModels.map(p => p.id));
     updateSavedBadge();
     updateTabBadges();
-    renderPickTab();
-    renderFinalTab();
     renderNotionDBTab();
 
     result.innerHTML = `
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--r-md);padding:16px;text-align:center">
-        <div style="font-size:28px;margin-bottom:8px">✅</div>
-        <div style="font-weight:800;color:#166534;font-size:15px">전체 동기화 완료!</div>
+        <div style="font-size:26px;margin-bottom:6px">✅</div>
+        <div style="font-weight:800;color:#166534;font-size:14px">${label} 동기화 완료!</div>
         <div style="display:flex;justify-content:center;gap:20px;margin-top:8px;font-size:12px;font-weight:700">
-          <span style="color:#059669">💾 ${totalUpserted}건 저장</span>
-          <span style="color:#7c3aed">🖼️ 이미지 ${totalImages}장 이사</span>
-          <span style="color:#6b7280">📦 ${totalBatches}회 배치</span>
-          ${totalFailed > 0 ? `<span style="color:#dc2626">❌ 실패 ${totalFailed}건</span>` : ''}
+          <span style="color:#059669">💾 ${upserted}건 저장</span>
+          <span style="color:#7c3aed">🖼️ 이미지 ${images}장</span>
+          <span style="color:#6b7280">📦 ${batches}회 배치</span>
+          ${failed > 0 ? `<span style="color:#dc2626">❌ 실패 ${failed}건</span>` : ''}
         </div>
       </div>`;
-    showToast(`✅ 전체 노션 동기화 완료! ${totalUpserted}건 저장`);
+    showToast(`✅ ${label} 동기화 완료! ${upserted}건 저장`);
 
   } catch (e) {
-    console.error('노션 동기화 실패:', e);
+    console.error('[syncSingleDB]', e);
     result.innerHTML = `
       <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:var(--r-md);padding:16px;text-align:center">
         <div style="font-size:24px;margin-bottom:6px">⚠️</div>
-        <div style="font-weight:700;color:#9f1239;font-size:13px">동기화 실패</div>
+        <div style="font-weight:700;color:#9f1239;font-size:13px">${label} 동기화 실패</div>
         <div style="color:#fb7185;font-size:12px;margin-top:4px">${e.message}</div>
-        <div style="color:var(--gray-400);font-size:11px;margin-top:6px">
-          Vercel 환경변수(NOTION_TOKEN, NOTION_DB_ID_MODEL 등)를 확인해 주세요
-        </div>
-        ${totalUpserted > 0 ? `<div style="color:#10b981;font-size:11px;margin-top:4px">중단 전 ${totalUpserted}건은 저장됐어요</div>` : ''}
+        ${upserted > 0 ? `<div style="color:#10b981;font-size:11px;margin-top:4px">중단 전 ${upserted}건은 저장됐어요</div>` : ''}
       </div>`;
-    showToast('⚠️ 노션 동기화 실패: ' + e.message);
+    showToast(`⚠️ ${label} 동기화 실패: ` + e.message);
   } finally {
     btn.disabled  = false;
     btn.innerHTML = '🔄 동기화';
