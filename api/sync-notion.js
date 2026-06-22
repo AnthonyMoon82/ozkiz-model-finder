@@ -253,12 +253,16 @@ export default async function handler(req, res) {
 
       // ── 텍스트 속성 매핑 ─────────────────────────────
       const fullName    = pick(p, '이름','Name','name','모델명','성명');
-      const rawInsta    = pick(p, '인스타ID','인스타그램','Instagram','@ID','username','인스타','SNS');
-      const username    = rawInsta.replace(/^@/,'').replace(/https?:\/\/[^/]*instagram\.com\//i,'').trim();
-      const height      = pick(p, '키','Height','height','신장');
-      const weight      = pick(p, '몸무게','Weight','weight','체중');
-      const footSize    = pick(p, '발사이즈','발 사이즈','FootSize','foot','shoe','발');
-      const clothesSize = pick(p, '옷사이즈','옷 사이즈','Size','size','ClothesSize','호수');
+      const rawInsta    = pick(p, '인스타ID','인스타그램','인스타','Instagram','@ID','username','SNS','계정','소셜');
+      const username    = rawInsta
+        .replace(/^@/, '')
+        .replace(/https?:\/\/[^/]*instagram\.com\//i, '')
+        .replace(/\/+$/, '')   // 끝에 붙은 슬래시 제거
+        .trim();
+      const height      = pick(p, '키','키(cm)','키 (cm)','키(㎝)','Height','height','신장');
+      const weight      = pick(p, '몸무게','몸무게(kg)','몸무게 (kg)','몸무게(㎏)','Weight','weight','체중');
+      const footSize    = pick(p, '발사이즈','발사이즈(mm)','발 사이즈','발 사이즈(mm)','FootSize','foot','shoe','발','신발');
+      const clothesSize = pick(p, '옷사이즈','옷 사이즈','사이즈','옷사이즈(호)','옷 사이즈(호)','Size','size','ClothesSize','호수','의류사이즈');
       const birthDate   = pick(p, '생년월일','나이','출생','Age','생년','년생','출생연도');
       const gender      = pick(p, '성별','Gender','gender');
       const nationality = pick(p, '국적','Nationality','nationality') || '한국';
