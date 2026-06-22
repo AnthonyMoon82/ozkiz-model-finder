@@ -9,7 +9,7 @@
  * → { success: true,  analysis: { targetGender, targetSize, styleTags, conceptSuggestion } }
  * → { success: false, error: "친절한 한국어 에러 메시지" }
  *
- * 모델: gemini-2.5-pro (최고 성능 Pro 모델, 다중 이미지 종합 분석)
+ * 모델: gemini-3.5-flash (최고 성능 Pro 모델, 다중 이미지 종합 분석)
  */
 
 export const maxDuration = 60;           // Vercel Fluid 컴퓨팅 (신규 방식)
@@ -95,7 +95,7 @@ export default async function handler(req, res) {
   let geminiRes;
   try {
     geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_KEY}`,
       {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
