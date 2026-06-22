@@ -6,34 +6,65 @@
  *   GEMINI_API_KEY   — Google Gemini API 키
  *
  * POST { images: [{ base64: string, mimeType: string }, ...] }  ← 다중 이미지 배열
- * → { success: true, analysis: { targetGender, targetSize, styleTags, conceptSuggestion } }
+ * → { success: true,  analysis: { targetGender, targetSize, styleTags, conceptSuggestion } }
+ * → { success: false, error: "친절한 한국어 에러 메시지" }
  *
  * 모델: gemini-3.5-flash (다중 이미지 종합 분석에 최적화)
  */
 
 export const config = { maxDuration: 60 };
 
+// ── Gemini HTTP 에러 코드 → 친절한 한국어 메시지 변환 ──────────
+function toKoreanError(status, rawMessage = '') {
+  const msg = rawMessage.toLowerCase();
+
+  if (msg.includes('high demand') || msg.includes('overloaded') ||
+      status === 503 || status === 429) {
+    return '현재 AI 서버에 사용자가 몰려 지연되고 있습니다. 잠시 후 다시 시도해 주세요.';
+  }
+  if (msg.includes('quota') || msg.includes('rate limit')) {
+    return 'AI 분석 요청 한도에 도달했습니다. 잠시 후 다시 시도해 주세요.';
+  }
+  if (msg.includes('timeout') || msg.includes('timed out') ||
+      msg.includes('aborted') || status === 504) {
+    return 'AI 분석 요청 시간이 초과됐습니다. 이미지 수를 줄이거나 잠시 후 다시 시도해 주세요.';
+  }
+  if (msg.includes('invalid api key') || msg.includes('api_key') || status === 401 || status === 403) {
+    return 'Gemini API 키가 유효하지 않습니다. Vercel 환경변수(GEMINI_API_KEY)를 확인해 주세요.';
+  }
+  if (msg.includes('image') || msg.includes('media') || status === 400) {
+    return '이미지 형식을 처리할 수 없습니다. JPG 또는 PNG 파일을 사용해 주세요.';
+  }
+  if (status >= 500) {
+    return 'Google AI 서버에 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+  }
+  return 'AI 분석 중 알 수 없는 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin',  '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-  if (req.method !== 'POST')   { return res.status(405).json({ error: 'Method not allowed' }); }
+  if (req.method !== 'POST')   { return res.status(405).json({ success: false, error: 'Method not allowed' }); }
 
   const GEMINI_KEY = process.env.GEMINI_API_KEY;
   if (!GEMINI_KEY) {
-    return res.status(500).json({ error: '환경변수 GEMINI_API_KEY 가 설정되지 않았습니다.' });
+    return res.status(500).json({
+      success: false,
+      error: '서버 설정 오류: GEMINI_API_KEY 환경변수가 없습니다. 관리자에게 문의해 주세요.',
+    });
   }
 
   const { images } = req.body || {};
   if (!Array.isArray(images) || !images.length) {
-    return res.status(400).json({ error: 'images 배열이 필요합니다. (예: [{ base64, mimeType }, ...])' });
+    return res.status(400).json({ success: false, error: '이미지 데이터가 없습니다.' });
   }
 
   // 최대 5장만 처리 (과부하 방지)
   const targets = images.slice(0, 5).filter(img => img?.base64 && img?.mimeType);
   if (!targets.length) {
-    return res.status(400).json({ error: '유효한 이미지 데이터가 없습니다.' });
+    return res.status(400).json({ success: false, error: '유효한 이미지 데이터가 없습니다.' });
   }
 
   const prompt = `다음은 이번 화보 촬영에 쓰일 여러 장의 아동복 착장(코디) 사진들 묶음이야. 이 사진들을 종합적으로 분석해서 전체적인 톤앤매너와 공통된 무드를 파악한 뒤, 다음 JSON 형식으로만 답해줘. 마크다운 코드 블록 없이 { } JSON만 응답해.
@@ -59,8 +90,10 @@ export default async function handler(req, res) {
     })),
   ];
 
+  // ── Gemini API 호출 ────────────────────────────────────────
+  let geminiRes;
   try {
-    const geminiRes = await fetch(
+    geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_KEY}`,
       {
         method:  'POST',
@@ -75,32 +108,65 @@ export default async function handler(req, res) {
         signal: AbortSignal.timeout(55_000),
       }
     );
-
-    if (!geminiRes.ok) {
-      const errBody = await geminiRes.json().catch(() => ({}));
-      throw new Error(errBody.error?.message || `Gemini HTTP ${geminiRes.status}`);
-    }
-
-    const data    = await geminiRes.json();
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-
-    // JSON 추출 (마크다운 래핑 방어)
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-    let analysis = {};
-    if (jsonMatch) {
-      try { analysis = JSON.parse(jsonMatch[0]); } catch { analysis = {}; }
-    }
-
-    // 기본값 보정
-    analysis.targetGender     = analysis.targetGender     || '여아';
-    analysis.targetSize       = parseInt(analysis.targetSize) || 110;
-    analysis.styleTags        = Array.isArray(analysis.styleTags) ? analysis.styleTags.slice(0, 5) : [];
-    analysis.conceptSuggestion = analysis.conceptSuggestion || '';
-
-    return res.status(200).json({ success: true, analysis });
-
-  } catch (e) {
-    console.error('[analyze-outfit]', e.message);
-    return res.status(500).json({ error: `AI 분석 실패: ${e.message}` });
+  } catch (fetchErr) {
+    // 네트워크 오류 / 타임아웃
+    console.error('[analyze-outfit] fetch 실패:', fetchErr.message);
+    const isTimeout = fetchErr.name === 'TimeoutError' || fetchErr.message.includes('abort');
+    return res.status(503).json({
+      success: false,
+      error: isTimeout
+        ? 'AI 분석 요청 시간이 초과됐습니다. 이미지 수를 줄이거나 잠시 후 다시 시도해 주세요.'
+        : '네트워크 오류로 AI 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    });
   }
+
+  // ── HTTP 상태 에러 처리 ────────────────────────────────────
+  if (!geminiRes.ok) {
+    let errMessage = '';
+    try {
+      const errBody = await geminiRes.json();
+      errMessage = errBody.error?.message || '';
+    } catch { /* JSON 파싱 실패 시 무시 */ }
+
+    const koreanMsg = toKoreanError(geminiRes.status, errMessage);
+    console.error(`[analyze-outfit] Gemini HTTP ${geminiRes.status}: ${errMessage}`);
+    return res.status(502).json({ success: false, error: koreanMsg });
+  }
+
+  // ── 응답 파싱 ──────────────────────────────────────────────
+  let data;
+  try {
+    data = await geminiRes.json();
+  } catch (parseErr) {
+    console.error('[analyze-outfit] 응답 JSON 파싱 실패:', parseErr.message);
+    return res.status(502).json({
+      success: false,
+      error: 'AI 서버 응답을 처리하는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+    });
+  }
+
+  // ── 후보 텍스트 추출 ──────────────────────────────────────
+  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (!rawText) {
+    console.warn('[analyze-outfit] Gemini 빈 응답:', JSON.stringify(data).slice(0, 200));
+    return res.status(502).json({
+      success: false,
+      error: 'AI가 분석 결과를 반환하지 않았습니다. 다시 시도해 주세요.',
+    });
+  }
+
+  // ── JSON 추출 (마크다운 래핑 방어) ────────────────────────
+  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+  let analysis = {};
+  if (jsonMatch) {
+    try { analysis = JSON.parse(jsonMatch[0]); } catch { analysis = {}; }
+  }
+
+  // ── 기본값 보정 ────────────────────────────────────────────
+  analysis.targetGender      = analysis.targetGender      || '여아';
+  analysis.targetSize        = parseInt(analysis.targetSize) || 110;
+  analysis.styleTags         = Array.isArray(analysis.styleTags) ? analysis.styleTags.slice(0, 5) : [];
+  analysis.conceptSuggestion = analysis.conceptSuggestion  || '';
+
+  return res.status(200).json({ success: true, analysis });
 }
