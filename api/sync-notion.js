@@ -7,10 +7,10 @@
  *  ──────────────────────────────────────────────────────────
  *  NOTION_TOKEN               노션 통합 시크릿 토큰 (secret_...)
  *
- *  NOTION_DB_ID_MODEL         모델 DB ID   (dbIndex: 0)
+ *  NOTION_MODEL_DB_ID         모델 DB ID   (dbIndex: 0)
  *                             기존 NOTION_DB_ID 도 폴백으로 인식
- *  NOTION_DB_ID_OUTSOURCE     외주 DB ID   (dbIndex: 1)
- *  NOTION_DB_ID_STUDIO        스튜디오 DB ID (dbIndex: 2)
+ *  NOTION_OUTSOURCE_DB_ID     외주 DB ID   (dbIndex: 1)
+ *  NOTION_STUDIO_DB_ID        스튜디오 DB ID (dbIndex: 2)
  *
  *  SUPABASE_URL               Supabase 프로젝트 URL
  *  SUPABASE_SERVICE_ROLE_KEY  서비스 롤 키 (Storage 업로드용, anon 키 아님!)
