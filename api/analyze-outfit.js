@@ -9,10 +9,11 @@
  * → { success: true,  analysis: { targetGender, targetSize, styleTags, conceptSuggestion } }
  * → { success: false, error: "친절한 한국어 에러 메시지" }
  *
- * 모델: gemini-3.5-flash (다중 이미지 종합 분석에 최적화)
+ * 모델: gemini-2.5-pro (최고 성능 Pro 모델, 다중 이미지 종합 분석)
  */
 
-export const config = { maxDuration: 60 };
+export const maxDuration = 60;           // Vercel Fluid 컴퓨팅 (신규 방식)
+export const config     = { maxDuration: 60 }; // Vercel 레거시 호환
 
 // ── Gemini HTTP 에러 코드 → 친절한 한국어 메시지 변환 ──────────
 function toKoreanError(status, rawMessage = '') {
@@ -94,7 +95,7 @@ export default async function handler(req, res) {
   let geminiRes;
   try {
     geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_KEY}`,
       {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
