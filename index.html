@@ -1640,24 +1640,29 @@ function closeModelDetailModal() {
 
 // ── 단위 중복 방지 sanitize 헬퍼 ──────────────────────
 function sanitizeUsername(raw) {
-  if (!raw) return '';
-  // 모든 앞 @ 제거 후 클린 아이디 반환 (DB 저장은 @ 없이)
+  if (!raw || raw === '—') return '';
   return String(raw).replace(/^@+/, '').trim();
 }
 function sanitizeHeight(raw) {
-  if (!raw) return '';
+  if (!raw || raw === '—') return '';
   const num = String(raw).replace(/cm/gi, '').trim();
-  return num ? num + 'cm' : '';
+  return num && num !== '—' ? num + 'cm' : '';
 }
 function sanitizeWeight(raw) {
-  if (!raw) return '';
+  if (!raw || raw === '—') return '';
   const num = String(raw).replace(/kg/gi, '').trim();
-  return num ? num + 'kg' : '';
+  return num && num !== '—' ? num + 'kg' : '';
 }
 function sanitizeFootSize(raw) {
-  if (!raw) return '';
+  if (!raw || raw === '—') return '';
   const num = String(raw).replace(/mm/gi, '').trim();
-  return num ? num + 'mm' : '';
+  return num && num !== '—' ? num + 'mm' : '';
+}
+function sanitizeClothesSize(raw) {
+  if (!raw || raw === '—') return '';
+  let s = String(raw).trim();
+  if (!s.includes('호') && !isNaN(parseInt(s))) s += '호';
+  return s;
 }
 
 // ── 뷰 모드 렌더링 ────────────────────────────────────
@@ -1686,7 +1691,7 @@ const OUTSOURCE_STEP_TYPES = ['디렉팅','스타일리스트','포토그래퍼'
 const STUDIO_TYPES    = ['렌탈스튜디오','호리존스튜디오','자연광스튜디오','독채스튜디오','컨셉스튜디오','로케이션(야외)','기타'];
 const STUDIO_CONCEPTS = ['가정집','빈티지','유럽풍','모던','숲속/정원','한옥','학교/교실','병원','사무실','식당/카페','상점/마트','옥상/루프탑','바다/해변','체육관','수영장','호리존','기타'];
 function clothesSizeDropdown(p) {
-  const cur = p.clothesSize || '';
+  const cur = sanitizeClothesSize(p.clothesSize);
   const opts = ['', ...CLOTHES_SIZES].map(s =>
     `<option value="${s}" ${s===cur?'selected':''}>${s || '사이즈 선택'}</option>`).join('');
   return `<select class="status-select-inline"
@@ -1861,10 +1866,10 @@ function renderDetailView(p) {
 
 function renderModelDetail(p, f, avatar, images) {
   const sp       = extractChildProfile(p);
-  const heightVal= p.height  ? p.height  + 'cm' : sp.height || '—';
-  const weightVal= p.weight  ? p.weight  + 'kg' : sp.weight || '—';
+  const heightVal= sanitizeHeight(p.height || sp.height);
+  const weightVal= sanitizeWeight(p.weight || sp.weight);
   const birthVal = p.birthDate || p.birthYear || sp.birth || '—';
-  const footVal  = (p.footSize||p.shoeSize) ? (p.footSize||p.shoeSize)+'mm' : '—';
+  const footVal  = sanitizeFootSize(p.footSize || p.shoeSize || sp.footSize);
   const igUrl    = p.username && p.username!=='알수없음' ? `https://www.instagram.com/${p.username}/` : '';
   const memoText = [p.memo||p.comment, p.caption].filter(Boolean).join('\n\n').trim();
 
@@ -2620,14 +2625,15 @@ function cardShell(p, inner) {
 // 🗂️ 모델 DB 카드
 function renderModelCard_list(p) {
   const sp         = extractChildProfile(p);
-  const heightVal  = p.height  ? p.height  + 'cm' : sp.height;
-  const weightVal  = p.weight  ? p.weight  + 'kg' : sp.weight;
-  const footVal    = (p.footSize||p.shoeSize) ? (p.footSize||p.shoeSize)+'mm' : '';
+  const heightVal  = sanitizeHeight(p.height || sp.height);
+  const weightVal  = sanitizeWeight(p.weight || sp.weight);
+  const footVal    = sanitizeFootSize(p.footSize || p.shoeSize || sp.footSize);
   const birthVal   = sp.birth || '';
   const specBadges = [heightVal, weightVal, footVal, birthVal].filter(Boolean)
     .map(v => `<span class="profile-badge">${v}</span>`).join('');
-  const clothesBadge = p.clothesSize
-    ? `<span class="profile-badge" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe">${p.clothesSize}</span>` : '';
+  const clothesVal  = sanitizeClothesSize(p.clothesSize);
+  const clothesBadge = clothesVal
+    ? `<span class="profile-badge" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe">${clothesVal}</span>` : '';
   const igLink = p.username && p.username!=='알수없음'
     ? `<a href="https://www.instagram.com/${p.username}/" target="_blank" style="font-size:11px;color:var(--red);text-decoration:none">@${p.username}</a>`
     : `<span style="font-size:11px;color:var(--gray-400)">인스타 없음</span>`;
@@ -2695,9 +2701,10 @@ function _thumbImgHtml(p) {
 // 🗂️ 모델 DB — 카드형
 function renderModelCard_thumb(p) {
   const sp        = extractChildProfile(p);
-  const heightVal = p.height ? p.height+'cm' : sp.height;
-  const clothesBadge = p.clothesSize
-    ? `<span class="profile-badge" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe">${p.clothesSize}</span>` : '';
+  const heightVal = sanitizeHeight(p.height || sp.height);
+  const clothesVal = sanitizeClothesSize(p.clothesSize);
+  const clothesBadge = clothesVal
+    ? `<span class="profile-badge" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe">${clothesVal}</span>` : '';
   const igText = p.username && p.username!=='알수없음' ? `@${p.username}` : '';
   return `<div class="thumb-card" onclick="openModelDetailModal('${p.id}')">
     <div class="thumb-card-img">${_thumbImgHtml(p)}</div>
