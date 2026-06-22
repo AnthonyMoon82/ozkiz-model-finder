@@ -3691,7 +3691,7 @@ async function submitOutfitUpload() {
     }));
 
     // 2. Gemini AI 종합 분석 (모든 이미지 배열로 전송)
-    btn.textContent = `✨ AI 분석 중... (${outfitFiles.length}장 종합)`;
+    btn.textContent = `✨ Gemini Pro AI가 옷의 무드를 심층 분석 중입니다... (최대 30초 소요)`;
     let analysis = {};
     try {
       const res  = await fetch('/api/analyze-outfit', {
