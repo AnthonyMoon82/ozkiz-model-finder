@@ -68,7 +68,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ success: false, error: '유효한 이미지 데이터가 없습니다.' });
   }
 
-  const prompt = `다음은 이번 화보 촬영에 쓰일 여러 장의 아동복 착장(코디) 사진들 묶음이야. 이 사진들을 종합적으로 분석해서 전체적인 톤앤매너와 공통된 무드를 파악한 뒤, 다음 JSON 형식으로만 답해줘. 마크다운 코드 블록 없이 { } JSON만 응답해.
+  const prompt = `다음은 이번 화보 촬영에 쓰일 여러 장의 아동복 착장(코디) 사진들 묶음이야. 이 사진들을 종합적으로 분석해서 전체적인 톤앤매너와 공통된 무드를 파악한 뒤, 아래 JSON 형식으로 답해줘.
 
 {
   "targetGender": "여아/남아/공용 중 하나",
@@ -81,7 +81,10 @@ export default async function handler(req, res) {
 - targetGender: 착장 스타일 기반 추정 ("여아", "남아", "공용")
 - targetSize: 착장에 어울리는 아동 키 (숫자만, 예: 100, 110, 120, 130, 140)
 - styleTags: 전체 착장의 공통 무드 키워드 배열 (["러블리", "캐주얼", "스트릿", "모던", "내추럴", "시크", "스포티", "클래식"] 중 최대 3개)
-- conceptSuggestion: 이 코디 묶음으로 연출할 수 있는 촬영 컨셉 아이디어`;
+- conceptSuggestion: 이 코디 묶음으로 연출할 수 있는 촬영 컨셉 아이디어
+
+[출력 규칙 — 반드시 준수]
+절대로 마크다운(` + '```' + `json, ` + '```' + ` 등)을 사용하지 마. 오직 순수한 JSON 중괄호 {} 문자열만 출력해. 앞뒤에 어떤 설명도 붙이지 마.`;
 
   // parts 배열: 텍스트 프롬프트 + 모든 이미지 inlineData
   const parts = [
@@ -156,8 +159,12 @@ export default async function handler(req, res) {
     });
   }
 
-  // ── JSON 추출 (마크다운 래핑 방어) ────────────────────────
-  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+  // ── 마크다운 잔여물 제거 후 JSON 추출 ────────────────────
+  const cleanText = rawText
+    .replace(/```json/gi, '')
+    .replace(/```/gi, '')
+    .trim();
+  const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
   let analysis = {};
   if (jsonMatch) {
     try { analysis = JSON.parse(jsonMatch[0]); } catch { analysis = {}; }
