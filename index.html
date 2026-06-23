@@ -1175,7 +1175,21 @@
       <div id="outfitPreviewGrid" class="outfit-preview-grid" style="display:none;margin-top:10px"></div>
     </div>
 
-    <!-- Gemini 분석 진행 상태 -->
+    <!-- 소구점 / 참고 메모 -->
+    <div style="margin-bottom:14px">
+      <label style="font-size:12px;font-weight:700;color:var(--gray-600);display:block;margin-bottom:6px">
+        소구점 / 참고 메모
+        <span style="font-size:10px;font-weight:400;color:var(--gray-400)">(선택 · AI 분석에 반영됩니다)</span>
+      </label>
+      <textarea id="outfitMemoInput" rows="3"
+        placeholder="예: 봄 시즌 신상 러블리 컨셉, 야외 로케이션 원함, 화사한 파스텔 톤 강조..."
+        style="width:100%;padding:10px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);
+               font-family:inherit;font-size:13px;color:var(--gray-800);resize:vertical;
+               outline:none;box-sizing:border-box;line-height:1.6;transition:border-color .15s"
+        onfocus="this.style.borderColor='var(--red)'" onblur="this.style.borderColor='var(--gray-200)'"></textarea>
+    </div>
+
+    <!-- AI 분석 진행 상태 -->
     <div id="outfitAnalyzeStatus" style="display:none;margin-bottom:12px;padding:10px 14px;background:linear-gradient(135deg,#f0f4ff,#fdf2f8);border:1px solid #e0e7ff;border-radius:var(--r-sm);font-size:12px;color:#4338ca;font-weight:600;text-align:center">
       ✨ Gemini AI가 옷의 무드를 분석하고 있습니다...
     </div>
@@ -3473,6 +3487,16 @@ function calcOutfitStudioScore(studio, analysis) {
   score += styleHits.length * 20;
   if (styleHits.length) reasons.push(`컨셉 ${styleHits.join('·')}`);
 
+  // studioRecommendation 직접 매칭 (+40) — AI가 명시적으로 추천한 스튜디오 타입
+  const studioRec = (analysis.studioRecommendation || '').toLowerCase();
+  if (studioRec) {
+    const recHits = allTags.filter(t =>
+      studioRec.includes(t.toLowerCase()) || t.toLowerCase().split(/\s/).some(w => w.length > 1 && studioRec.includes(w))
+    );
+    score += recHits.length * 40;
+    if (recHits.length) reasons.push(`AI추천 ${recHits.slice(0,2).join('·')}`);
+  }
+
   // conceptSuggestion 키워드 일치 (+20)
   const suggestion = (analysis.conceptSuggestion || '').toLowerCase();
   if (suggestion) {
@@ -3494,10 +3518,11 @@ function renderOutfitRecommendations(outfit) {
   const analysis = outfit.ai_analysis || {};
 
   // AI 분석 카드
-  const pStyles = Array.isArray(analysis.styleTags) ? analysis.styleTags : [];
+  const pStyles  = Array.isArray(analysis.styleTags) ? analysis.styleTags : [];
+  const memoText = outfit.memo || '';
   const analysisCard = `
     <div class="outfit-analysis-card">
-      <div class="outfit-analysis-title">🤖 Gemini AI 분석 결과</div>
+      <div class="outfit-analysis-title">🤖 Claude AI 분석 결과</div>
       <div class="outfit-analysis-grid">
         <div class="outfit-analysis-item">
           <span class="outfit-analysis-label">타겟 성별</span>
@@ -3512,9 +3537,18 @@ function renderOutfitRecommendations(outfit) {
           <span class="outfit-analysis-value">${pStyles.map(t => `<span class="tag">${t}</span>`).join('') || '—'}</span>
         </div>
         <div class="outfit-analysis-item" style="grid-column:1/-1">
-          <span class="outfit-analysis-label">컨셉 제안</span>
+          <span class="outfit-analysis-label">📝 촬영 컨셉 제안</span>
           <span class="outfit-analysis-value concept-suggestion">${analysis.conceptSuggestion || '—'}</span>
         </div>
+        <div class="outfit-analysis-item" style="grid-column:1/-1">
+          <span class="outfit-analysis-label">📸 추천 스튜디오 타입</span>
+          <span class="outfit-analysis-value" style="color:#7c3aed;font-weight:700">${analysis.studioRecommendation || '—'}</span>
+        </div>
+        ${memoText ? `
+        <div class="outfit-analysis-item" style="grid-column:1/-1;border-top:1px solid #e0e7ff;padding-top:8px;margin-top:4px">
+          <span class="outfit-analysis-label">💬 소구점 / 참고 메모</span>
+          <span class="outfit-analysis-value" style="color:var(--gray-600);font-weight:400;line-height:1.6">${memoText}</span>
+        </div>` : ''}
       </div>
     </div>`;
 
@@ -3593,6 +3627,8 @@ function openOutfitUploadModal() {
   if (grid) { grid.innerHTML = ''; grid.style.display = 'none'; }
   const status = document.getElementById('outfitAnalyzeStatus');
   if (status) status.style.display = 'none';
+  const memo = document.getElementById('outfitMemoInput');
+  if (memo) memo.value = '';
   const btn = document.getElementById('outfitSubmitBtn');
   if (btn) { btn.disabled = true; btn.style.opacity = '.5'; btn.textContent = '🤖 분석 및 등록'; }
   document.getElementById('outfitUploadModal').classList.add('open');
@@ -3694,6 +3730,7 @@ async function submitOutfitUpload() {
   if (!outfitFiles.length) return;
   const btn      = document.getElementById('outfitSubmitBtn');
   const statusEl = document.getElementById('outfitAnalyzeStatus');
+  const memo     = (document.getElementById('outfitMemoInput')?.value || '').trim();
 
   btn.disabled = true;
   btn.style.opacity = '.5';
@@ -3730,7 +3767,7 @@ async function submitOutfitUpload() {
       const res  = await fetch('/api/analyze-outfit', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ images: imageParts }),
+        body:    JSON.stringify({ images: imageParts, memo }),
       });
       const data = await res.json();
       if (res.ok && data.success) analysis = data.analysis;
@@ -3743,9 +3780,10 @@ async function submitOutfitUpload() {
     const newId = `outfit_${Date.now()}`;
     const { error: dbErr } = await db.from('saved_outfits').insert({
       id:          newId,
-      image_urls:  imageUrls.filter(Boolean),   // 배열로 저장
-      image_url:   imageUrls.find(Boolean) || '', // 폴백 호환용
+      image_urls:  imageUrls.filter(Boolean),
+      image_url:   imageUrls.find(Boolean) || '',
       ai_analysis: analysis,
+      memo:        memo || null,
     });
     if (dbErr) throw new Error('저장 실패: ' + dbErr.message);
 
