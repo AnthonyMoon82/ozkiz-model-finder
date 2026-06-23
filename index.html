@@ -2297,7 +2297,7 @@ function renderFinalTab() {
 // saved-toolbar 토글 버튼 active 상태 동기화 (pick / final)
 function _syncSavedViewToggle(tabKey) {
   const key  = tabKey || currentSidebarTab || 'pick';
-  const mode = viewModes[key] || 'list';
+  const mode = viewModes[key] || 'card';
   const sl   = document.getElementById('savedViewList');
   const sc   = document.getElementById('savedViewCard');
   if (sl) sl.classList.toggle('active', mode !== 'card');
@@ -2306,7 +2306,7 @@ function _syncSavedViewToggle(tabKey) {
 
 // DB 필터 영역 토글 버튼 active 상태 동기화 (model / outsource / studio)
 function _syncDbViewToggle(dbType) {
-  const mode = viewModes[dbType] || 'list';
+  const mode = viewModes[dbType] || 'card';
   const dl   = document.getElementById('dbViewList');
   const dc   = document.getElementById('dbViewCard');
   if (dl) dl.classList.toggle('active', mode !== 'card');
@@ -2326,7 +2326,7 @@ let dbSearchQuery           = ''; // DB 공통 검색어
 let viewModes = (() => {
   try { return JSON.parse(localStorage.getItem('ozkiz_view_modes')) || {}; } catch { return {}; }
 })();
-['pick','final','model','outsource','studio'].forEach(k => { if (!viewModes[k]) viewModes[k] = 'list'; });
+['pick','final','model','outsource','studio'].forEach(k => { if (!viewModes[k]) viewModes[k] = 'card'; });
 const OUTSOURCE_TYPES    = ['전체보기', ...OUTSOURCE_STEP_TYPES];
 const MODEL_NATIONALITIES= ['전체보기', '한국', '외국', '혼혈', 'AI'];
 const MODEL_GENDERS      = ['전체보기', '여아', '남아'];
