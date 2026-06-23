@@ -3,7 +3,8 @@
  * Anthropic Claude Vision으로 착장(코디 묶음) 이미지를 종합 분석해 컨셉 추천 데이터 추출
  *
  * 필수 Vercel 환경변수:
- *   ANTHROPIC_API_KEY  — Anthropic API 키
+ *   CUSTOM_API_URL  — 사내 Claude Proxy/Gateway 주소
+ *   CUSTOM_API_KEY  — 사내 API 인증 키
  *
  * POST { images: [{ base64: string, mimeType: string }, ...] }  ← 다중 이미지 배열
  * → { success: true,  analysis: { targetGender, targetSize, styleTags, conceptSuggestion } }
@@ -30,7 +31,7 @@ function toKoreanError(status, rawMessage = '') {
     return 'AI 분석 요청 시간이 초과됐습니다. 이미지 수를 줄이거나 잠시 후 다시 시도해 주세요.';
   }
   if (status === 401 || status === 403 || msg.includes('invalid') || msg.includes('auth')) {
-    return 'Claude API 키가 유효하지 않습니다. Vercel 환경변수(ANTHROPIC_API_KEY)를 확인해 주세요.';
+    return 'API 키가 유효하지 않습니다. Vercel 환경변수(CUSTOM_API_KEY)를 확인해 주세요.';
   }
   if (status === 400 || msg.includes('image') || msg.includes('media')) {
     return '이미지 형식을 처리할 수 없습니다. JPG 또는 PNG 파일을 사용해 주세요.';
@@ -48,11 +49,12 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
   if (req.method !== 'POST')   { return res.status(405).json({ success: false, error: 'Method not allowed' }); }
 
-  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
-  if (!ANTHROPIC_KEY) {
+  const CUSTOM_API_URL = process.env.CUSTOM_API_URL;
+  const CUSTOM_API_KEY = process.env.CUSTOM_API_KEY;
+  if (!CUSTOM_API_URL || !CUSTOM_API_KEY) {
     return res.status(500).json({
       success: false,
-      error: '서버 설정 오류: ANTHROPIC_API_KEY 환경변수가 없습니다. 관리자에게 문의해 주세요.',
+      error: '서버 설정 오류: CUSTOM_API_URL 또는 CUSTOM_API_KEY 환경변수가 없습니다. 관리자에게 문의해 주세요.',
     });
   }
 
@@ -101,11 +103,11 @@ export default async function handler(req, res) {
   // ── Anthropic Messages API 호출 ──────────────────────────────
   let claudeRes;
   try {
-    claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+    claudeRes = await fetch(CUSTOM_API_URL, {
       method:  'POST',
       headers: {
         'Content-Type':      'application/json',
-        'x-api-key':          ANTHROPIC_KEY,
+        'x-api-key':          CUSTOM_API_KEY,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
