@@ -3659,6 +3659,37 @@ function fileToBase64(file) {
   });
 }
 
+/**
+ * 이미지 파일을 최대 800px로 리사이징한 뒤 { base64, mimeType } 반환
+ * Vercel 10초 타임아웃 내 Gemini API 전송을 위한 압축 처리
+ */
+function resizeAndToBase64(file, maxPx = 800) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = e => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxPx || height > maxPx) {
+          if (width >= height) { height = Math.round(height * maxPx / width);  width  = maxPx; }
+          else                 { width  = Math.round(width  * maxPx / height); height = maxPx; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width  = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        const mimeType = file.type || 'image/jpeg';
+        const dataUrl  = canvas.toDataURL(mimeType, 0.82); // 품질 82%
+        resolve({ base64: dataUrl.split(',')[1], mimeType });
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 async function submitOutfitUpload() {
   if (!outfitFiles.length) return;
   const btn      = document.getElementById('outfitSubmitBtn');
@@ -3675,10 +3706,9 @@ async function submitOutfitUpload() {
     const imageParts = []; // Gemini 전송용 { base64, mimeType }
 
     await Promise.all(outfitFiles.map(async (file, i) => {
-      const dataUrl  = await fileToBase64(file);
-      const base64   = dataUrl.split(',')[1];
-      const mimeType = file.type || 'image/jpeg';
-      imageParts[i]  = { base64, mimeType };
+      // 800px 리사이징 압축 → Vercel 타임아웃 방지
+      const { base64, mimeType } = await resizeAndToBase64(file, 800);
+      imageParts[i] = { base64, mimeType };
 
       const ext  = file.name.split('.').pop().toLowerCase() || 'jpg';
       const path = `outfits/${Date.now()}_${Math.random().toString(36).slice(2,8)}_${i}.${ext}`;
