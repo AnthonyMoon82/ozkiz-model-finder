@@ -56,7 +56,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const { images } = req.body || {};
+  const { images, memo } = req.body || {};
   if (!Array.isArray(images) || !images.length) {
     return res.status(400).json({ success: false, error: '이미지 데이터가 없습니다.' });
   }
@@ -82,19 +82,22 @@ export default async function handler(req, res) {
     {
       type: 'text',
       text: `위 아동복 착장(코디) 사진들을 종합적으로 분석해서 전체적인 톤앤매너와 공통된 무드를 파악한 뒤, 아래 JSON 형식으로 답해줘.
+${memo ? `\n[촬영 담당자 소구점 / 참고 메모]: ${memo}\n위 메모를 분석에 적극 반영해줘.` : ''}
 
 {
   "targetGender": "여아/남아/공용 중 하나",
   "targetSize": 110,
   "styleTags": ["태그1", "태그2", "태그3"],
-  "conceptSuggestion": "이 착장 묶음에 어울리는 촬영 컨셉 제안 (1~2문장, 한국어)"
+  "conceptSuggestion": "이 착장 묶음에 어울리는 촬영 컨셉 제안 (1~2문장, 한국어)",
+  "studioRecommendation": "이 컨셉에 가장 잘 맞는 스튜디오 타입 (예: '자연광 가정집 스튜디오', '화이트 호리존 + 야외 공원', '빈티지 유럽풍 실내')"
 }
 
 각 필드 기준:
 - targetGender: 착장 스타일 기반 추정 ("여아", "남아", "공용")
 - targetSize: 착장에 어울리는 아동 키 (숫자만, 예: 100, 110, 120, 130, 140)
 - styleTags: 전체 착장의 공통 무드 키워드 배열 (["러블리", "캐주얼", "스트릿", "모던", "내추럴", "시크", "스포티", "클래식"] 중 최대 3개)
-- conceptSuggestion: 이 코디 묶음으로 연출할 수 있는 촬영 컨셉 아이디어`,
+- conceptSuggestion: 이 코디 묶음으로 연출할 수 있는 촬영 컨셉 아이디어 (1~2문장)
+- studioRecommendation: 이 착장과 컨셉에 가장 어울리는 스튜디오 타입. 가정집/빈티지/유럽풍/모던/숲속/한옥/학교/병원/카페/옥상/바다/호리존/야외 중 1~2가지 조합으로 구체적으로 제안`,
     },
   ];
 
@@ -175,10 +178,11 @@ export default async function handler(req, res) {
   }
 
   // ── 기본값 보정 ───────────────────────────────────────────────
-  analysis.targetGender      = analysis.targetGender      || '여아';
-  analysis.targetSize        = parseInt(analysis.targetSize) || 110;
-  analysis.styleTags         = Array.isArray(analysis.styleTags) ? analysis.styleTags.slice(0, 5) : [];
-  analysis.conceptSuggestion = analysis.conceptSuggestion  || '';
+  analysis.targetGender        = analysis.targetGender        || '여아';
+  analysis.targetSize          = parseInt(analysis.targetSize) || 110;
+  analysis.styleTags           = Array.isArray(analysis.styleTags) ? analysis.styleTags.slice(0, 5) : [];
+  analysis.conceptSuggestion   = analysis.conceptSuggestion   || '';
+  analysis.studioRecommendation = analysis.studioRecommendation || '';
 
   return res.status(200).json({ success: true, analysis });
 }
