@@ -273,6 +273,14 @@ export default async function handler(req, res) {
       const shootDate   = pick(p, '촬영일','ShootDate','촬영날짜','촬영 일자');
       const status      = pick(p, '진행여부','진행 여부','상태','Status','status');
       const note        = pick(p, '코멘트','특징','Notes','메모','비고','특이사항','Memo','comment','Comments');
+      // ── 스튜디오 전용 필드 ──────────────────────────────
+      const price       = pick(p, '렌탈료','렌탈료(1h)','렌탈 요금','대관료','시간당 요금','대관 요금','Price','price','rental');
+      const website     = pick(p, '홈페이지','Website','website','URL','url','HOME','home','웹사이트','링크','site');
+      const sns         = pick(p, 'SNS','sns','인스타그램','인스타','Instagram','@ID','소셜','계정')
+        .replace(/^@/, '')
+        .replace(/https?:\/\/[^/]*instagram\.com\//i, '')
+        .replace(/\/+$/, '')
+        .trim();
 
       const biography = [
         height   && `키 ${height}`,
@@ -319,8 +327,10 @@ export default async function handler(req, res) {
         db_type,
         height, weight, footSize, shoeSize: footSize,
         clothesSize, birthDate, gender, nationality,
-        phone, location, category, shootDate, fee, status,
+        phone, location, address: location, category, shootDate, fee, status,
         comment: note,
+        // 스튜디오 전용
+        price, website, sns,
         ratings: { nicole: 0, rachel: 0, stella: 0 },
         notionId:  page.id,
         notionUrl: page.url,
