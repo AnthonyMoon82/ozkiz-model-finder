@@ -9,7 +9,7 @@
  * → { success: true,  analysis: { targetGender, targetSize, styleTags, conceptSuggestion } }
  * → { success: false, error: "친절한 한국어 에러 메시지" }
  *
- * 모델: claude-3-haiku-20240307 (초고속 · Vercel 10초 타임아웃 대응)
+ * 모델: claude-haiku-4-5-20251001 (초고속 · Vercel 10초 타임아웃 대응)
  */
 
 export const maxDuration = 60;           // Vercel Fluid 컴퓨팅 (신규 방식)
@@ -109,7 +109,7 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model:      'claude-3-haiku-20240307',
+        model:      'claude-haiku-4-5-20251001',
         max_tokens: 600,
         system: 'You are a children\'s fashion analyst. You must respond ONLY with a valid JSON object. Do not include any markdown formatting like ```json. Do not add any explanation before or after the JSON. Output the raw JSON object only.',
         messages: [{ role: 'user', content: userContent }],
