@@ -3576,15 +3576,14 @@ function renderOutfitRecommendations(outfit) {
       </div>
     </div>`;
 
-  // 모델 Top 5
+  // 모델 — 성별 분리, 수 제한 없음
   const models = savedModels.filter(p => isInternalData(p) && (p.db_type || 'model') === 'model');
-  const scoredModels = models
+  const scored = models
     .map(m => ({ ...m, _match: calcOutfitModelScore(m, analysis) }))
     .filter(m => m._match.score > 0)
-    .sort((a, b) => b._match.score - a._match.score)
-    .slice(0, 5);
+    .sort((a, b) => b._match.score - a._match.score);
 
-  const modelCards = scoredModels.map(m => {
+  function makeModelCard(m) {
     const { pct, reasons } = m._match;
     const thumb = (Array.isArray(m.images) && m.images[0]) || m.imgUrl || '';
     const badgeCls = pct >= 70 ? 'high' : pct >= 40 ? 'mid' : '';
@@ -3599,15 +3598,52 @@ function renderOutfitRecommendations(outfit) {
         ${reasons.length ? `<div class="rec-card-tags"><span class="rec-tag">${reasons.slice(0,2).join(' · ')}</span></div>` : ''}
       </div>
     </div>`;
-  }).join('');
+  }
 
-  // 스튜디오 Top 3
+  // 성별 판별 헬퍼
+  const isGirl = m => { const g = (m.gender||'').trim(); return g==='여'||g==='여아'; };
+  const isBoy  = m => { const g = (m.gender||'').trim(); return g==='남'||g==='남아'; };
+
+  // targetGenders 기준으로 필요한 성별 결정
+  const pgList = Array.isArray(analysis.targetGenders) ? analysis.targetGenders : [analysis.targetGender||''];
+  const needGirl = pgList.some(g => g==='여아' || g==='공용');
+  const needBoy  = pgList.some(g => g==='남아' || g==='공용');
+  const needBoth = needGirl && needBoy;
+
+  const girlModels  = scored.filter(isGirl);
+  const boyModels   = scored.filter(isBoy);
+  const otherModels = scored.filter(m => !isGirl(m) && !isBoy(m));
+
+  // 성별 섹션 HTML 생성
+  function modelSection(list, icon, label) {
+    if (!list.length) return '';
+    return `<div class="rec-section-title">${icon} ${label} <span style="font-size:11px;font-weight:400;color:var(--gray-400)">${list.length}명</span></div>
+      <div class="rec-grid">${list.map(makeModelCard).join('')}</div>`;
+  }
+
+  let modelHTML = '';
+  if (needBoth) {
+    modelHTML = modelSection(girlModels, '👧', '여아 추천 모델')
+              + modelSection(boyModels,  '👦', '남아 추천 모델');
+  } else if (needGirl) {
+    modelHTML = modelSection(girlModels, '👧', '여아 추천 모델');
+  } else if (needBoy) {
+    modelHTML = modelSection(boyModels, '👦', '남아 추천 모델');
+  } else {
+    // 성별 미정시 전체 통합
+    modelHTML = modelSection(scored, '👤', '추천 모델');
+  }
+  // 기타(성별 없는) 모델도 있으면 하단에 추가
+  if (otherModels.length && (needBoth || needGirl || needBoy)) {
+    modelHTML += modelSection(otherModels, '👤', '기타 추천 모델');
+  }
+
+  // 스튜디오 — 수 제한 없음
   const studios = savedModels.filter(p => isInternalData(p) && p.db_type === 'studio');
   const scoredStudios = studios
     .map(s => ({ ...s, _match: calcOutfitStudioScore(s, analysis) }))
     .filter(s => s._match.score > 0)
-    .sort((a, b) => b._match.score - a._match.score)
-    .slice(0, 3);
+    .sort((a, b) => b._match.score - a._match.score);
 
   const studioCards = scoredStudios.map(s => {
     const { pct, reasons } = s._match;
@@ -3626,15 +3662,16 @@ function renderOutfitRecommendations(outfit) {
     </div>`;
   }).join('');
 
+  const hasModels  = scored.length > 0;
+  const hasStudios = scoredStudios.length > 0;
+
   el.innerHTML = `
     ${analysisCard}
-    ${scoredModels.length ? `
-      <div class="rec-section-title">👤 추천 모델 Top ${scoredModels.length}</div>
-      <div class="rec-grid">${modelCards}</div>` : ''}
-    ${scoredStudios.length ? `
-      <div class="rec-section-title">📸 추천 스튜디오 Top ${scoredStudios.length}</div>
+    ${modelHTML}
+    ${hasStudios ? `
+      <div class="rec-section-title">📸 추천 스튜디오 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">${scoredStudios.length}곳</span></div>
       <div class="rec-grid">${studioCards}</div>` : ''}
-    ${!scoredModels.length && !scoredStudios.length ? `
+    ${!hasModels && !hasStudios ? `
       <div class="rec-empty">
         <div class="rec-empty-icon">🔍</div>
         <div class="rec-empty-title">매칭 가능한 데이터가 없어요</div>
