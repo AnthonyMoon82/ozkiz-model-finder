@@ -3456,6 +3456,25 @@ function selectOutfit(id) {
   renderOutfitRecommendations(outfit);
 }
 
+// ── Pinterest 레퍼런스 검색 URL 생성 ─────────────────────
+const STYLE_TAG_EN = {
+  '러블리':'lovely','캐주얼':'casual','스트릿':'street style','모던':'modern',
+  '내추럴':'natural','시크':'chic','스포티':'sporty','클래식':'classic',
+  '빈티지':'vintage','미니멀':'minimal','로맨틱':'romantic','걸리시':'girly',
+  '유니섹스':'unisex','아메카지':'american casual','프레피':'preppy',
+};
+function buildPinterestUrl(analysis) {
+  const tags  = (analysis.styleTags || []).map(t => STYLE_TAG_EN[t] || t);
+  const parts = [...tags, 'children fashion', 'kids outfit'];
+
+  // conceptSuggestion에서 핵심 키워드 추출 (첫 10어절)
+  const concept = (analysis.conceptSuggestion || '').replace(/[^\w\s가-힣]/g, ' ').split(/\s+/).slice(0, 8).join(' ');
+  if (concept) parts.unshift(concept);
+
+  const q = encodeURIComponent(parts.join(' ').trim());
+  return `https://www.pinterest.com/search/pins/?q=${q}&rs=typed`;
+}
+
 // ── 매칭 점수 계산 (착장 기준) ─────────────────────────
 function calcOutfitModelScore(model, analysis) {
   let score = 0;
@@ -3574,6 +3593,18 @@ function renderOutfitRecommendations(outfit) {
           <span class="outfit-analysis-value" style="color:var(--gray-600);font-weight:400;line-height:1.6">${memoText}</span>
         </div>` : ''}
       </div>
+      <!-- Pinterest 레퍼런스 버튼 -->
+      <a href="${buildPinterestUrl(analysis)}" target="_blank" rel="noopener"
+        style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;
+               padding:10px 14px;background:#e60023;color:white;border-radius:var(--r-md);
+               text-decoration:none;font-size:13px;font-weight:800;letter-spacing:-.2px;
+               transition:opacity .15s"
+        onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+          <path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/>
+        </svg>
+        Pinterest에서 레퍼런스 찾기
+      </a>
     </div>`;
 
   // 모델 — AI 모델 제외, 성별 분리, 성별당 최대 50명
