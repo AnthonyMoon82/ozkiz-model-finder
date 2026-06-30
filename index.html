@@ -3576,8 +3576,12 @@ function renderOutfitRecommendations(outfit) {
       </div>
     </div>`;
 
-  // 모델 — 성별 분리, 수 제한 없음
-  const models = savedModels.filter(p => isInternalData(p) && (p.db_type || 'model') === 'model');
+  // 모델 — AI 모델 제외, 성별 분리, 성별당 최대 50명
+  const models = savedModels.filter(p =>
+    isInternalData(p) &&
+    (p.db_type || 'model') === 'model' &&
+    (p.nationality || '').trim() !== 'AI'   // AI 모델 제외
+  );
   const scored = models
     .map(m => ({ ...m, _match: calcOutfitModelScore(m, analysis) }))
     .filter(m => m._match.score > 0)
@@ -3610,9 +3614,9 @@ function renderOutfitRecommendations(outfit) {
   const needBoy  = pgList.some(g => g==='남아' || g==='공용');
   const needBoth = needGirl && needBoy;
 
-  const girlModels  = scored.filter(isGirl);
-  const boyModels   = scored.filter(isBoy);
-  const otherModels = scored.filter(m => !isGirl(m) && !isBoy(m));
+  const girlModels  = scored.filter(isGirl).slice(0, 50);
+  const boyModels   = scored.filter(isBoy).slice(0, 50);
+  const otherModels = scored.filter(m => !isGirl(m) && !isBoy(m)).slice(0, 50);
 
   // 성별 섹션 HTML 생성
   function modelSection(list, icon, label) {
