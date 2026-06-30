@@ -85,7 +85,9 @@ export default async function handler(req, res) {
 ${memo ? `\n[촬영 담당자 소구점 / 참고 메모]: ${memo}\n위 메모를 분석에 적극 반영해줘.` : ''}
 
 {
-  "targetGender": "여아/남아/공용 중 하나",
+  "castingPlan": "필요한 모델 구성 (예: '여아 2명, 남아 1명' / '여아 1명' / '남아 2명')",
+  "targetGenders": ["여아", "남아"],
+  "targetGender": "여아/남아/공용 중 대표 하나",
   "targetSize": 110,
   "styleTags": ["태그1", "태그2", "태그3"],
   "conceptSuggestion": "이 착장 묶음에 어울리는 촬영 컨셉 제안 (1~2문장, 한국어)",
@@ -93,7 +95,9 @@ ${memo ? `\n[촬영 담당자 소구점 / 참고 메모]: ${memo}\n위 메모를
 }
 
 각 필드 기준:
-- targetGender: 착장 스타일 기반 추정 ("여아", "남아", "공용")
+- castingPlan: 소구점 메모를 최우선 참고해서 필요한 모델 성별/인원 구성을 명시 (예: "여아 2명, 남아 1명")
+- targetGenders: castingPlan에 등장하는 성별들을 중복 포함 배열로 (여아 2명이면 ["여아","여아"], 남아 포함이면 ["여아","여아","남아"])
+- targetGender: targetGenders 중 대표 성별 하나 ("여아", "남아", "공용")
 - targetSize: 착장에 어울리는 아동 키 (숫자만, 예: 100, 110, 120, 130, 140)
 - styleTags: 전체 착장의 공통 무드 키워드 배열 (["러블리", "캐주얼", "스트릿", "모던", "내추럴", "시크", "스포티", "클래식"] 중 최대 3개)
 - conceptSuggestion: 이 코디 묶음으로 연출할 수 있는 촬영 컨셉 아이디어 (1~2문장)
@@ -178,10 +182,12 @@ ${memo ? `\n[촬영 담당자 소구점 / 참고 메모]: ${memo}\n위 메모를
   }
 
   // ── 기본값 보정 ───────────────────────────────────────────────
-  analysis.targetGender        = analysis.targetGender        || '여아';
-  analysis.targetSize          = parseInt(analysis.targetSize) || 110;
-  analysis.styleTags           = Array.isArray(analysis.styleTags) ? analysis.styleTags.slice(0, 5) : [];
-  analysis.conceptSuggestion   = analysis.conceptSuggestion   || '';
+  analysis.castingPlan          = analysis.castingPlan          || '';
+  analysis.targetGenders        = Array.isArray(analysis.targetGenders) ? analysis.targetGenders : [analysis.targetGender || '여아'];
+  analysis.targetGender         = analysis.targetGender         || analysis.targetGenders[0] || '여아';
+  analysis.targetSize           = parseInt(analysis.targetSize) || 110;
+  analysis.styleTags            = Array.isArray(analysis.styleTags) ? analysis.styleTags.slice(0, 5) : [];
+  analysis.conceptSuggestion    = analysis.conceptSuggestion    || '';
   analysis.studioRecommendation = analysis.studioRecommendation || '';
 
   return res.status(200).json({ success: true, analysis });
