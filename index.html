@@ -3405,12 +3405,32 @@ async function renderOutfitList() {
             ${urls.length > 1 ? `<span class="outfit-stack-badge">${urls.length}장</span>` : ''}
           </div>`
         : `<div style="width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:28px;background:var(--gray-100)">👗</div>`;
-      return `<div class="coordi-item${isActive?' active':''}" onclick="selectOutfit('${o.id}')">
+      return `<div class="coordi-item${isActive?' active':''}" onclick="selectOutfit('${o.id}')" style="position:relative">
+        <button class="outfit-delete-btn" onclick="event.stopPropagation();deleteOutfit('${o.id}')"
+          title="삭제" style="position:absolute;top:5px;right:5px;z-index:10;width:22px;height:22px;
+          border-radius:50%;border:none;background:rgba(0,0,0,.55);color:white;font-size:11px;
+          cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;
+          font-weight:700;padding:0">✕</button>
         ${thumbHtml}
         <div class="coordi-item-name">${label}</div>
       </div>`;
     }).join('')}
   </div>`;
+}
+
+async function deleteOutfit(id) {
+  if (!confirm('이 착장을 삭제할까요?')) return;
+  const { error } = await db.from('saved_outfits').delete().eq('id', id);
+  if (error) { showToast('⚠️ 삭제 실패: ' + error.message); return; }
+  if (activeOutfitId === id) {
+    activeOutfitId = null;
+    const el = document.getElementById('castingRecommend');
+    if (el) el.innerHTML = `<div class="rec-empty"><div class="rec-empty-icon">✨</div>
+      <div class="rec-empty-title">착장을 선택해 주세요</div>
+      <div class="rec-empty-sub">왼쪽에서 착장을 선택하면 추천이 시작됩니다</div></div>`;
+  }
+  showToast('🗑️ 착장이 삭제됐습니다');
+  await renderOutfitList();
 }
 
 function formatOutfitDate(dateStr) {
@@ -3441,12 +3461,16 @@ function calcOutfitModelScore(model, analysis) {
   let score = 0;
   const reasons = [];
 
-  // 1. 성별 매칭 (+50)
+  // 1. 성별 매칭 (+50) — targetGenders 배열 또는 targetGender 단일값 모두 처리
   const mg = (model.gender || '').trim();
-  const pg = analysis.targetGender || '';
-  const genderOk =
-    (pg === '여아' && (mg === '여' || mg === '여아')) ||
-    (pg === '남아' && (mg === '남' || mg === '남아'));
+  const pgList = Array.isArray(analysis.targetGenders)
+    ? analysis.targetGenders
+    : [analysis.targetGender || ''];
+  const isF = mg === '여' || mg === '여아';
+  const isM = mg === '남' || mg === '남아';
+  const genderOk = pgList.some(pg =>
+    (pg === '여아' && isF) || (pg === '남아' && isM) || pg === '공용'
+  );
   if (genderOk) { score += 50; reasons.push('성별 일치'); }
 
   // 2. 사이즈/키 매칭 ±5cm (+30)
@@ -3525,8 +3549,8 @@ function renderOutfitRecommendations(outfit) {
       <div class="outfit-analysis-title">🤖 Claude AI 분석 결과</div>
       <div class="outfit-analysis-grid">
         <div class="outfit-analysis-item">
-          <span class="outfit-analysis-label">타겟 성별</span>
-          <span class="outfit-analysis-value">${analysis.targetGender || '—'}</span>
+          <span class="outfit-analysis-label">캐스팅 계획</span>
+          <span class="outfit-analysis-value" style="font-weight:700;color:#dc2626">${analysis.castingPlan || analysis.targetGender || '—'}</span>
         </div>
         <div class="outfit-analysis-item">
           <span class="outfit-analysis-label">타겟 사이즈</span>
